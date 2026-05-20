@@ -81,3 +81,18 @@ th {
   background: #1976d2;
   color: white;
 }
+
+.load-cell {
+  min-width: 180px;
+  background: #fafafa;
+  text-align: right;
+  padding: 8px;
+  font-size: 14px;
+}
+
+.load-item {
+  margin-bottom: 6px;
+  background: #e3f2fd;
+  padding: 4px 6px;
+  border-radius: 4px;
+}

@@ -10,20 +10,39 @@ import {
   classes,
   hours,
   days,
+  teachingLoads,
 } from "./data/mockData";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
-
   const [schedule, setSchedule] = useState({});
+
+  function countScheduledHours(className, teacherId) {
+    let count = 0;
+
+    for (const day of days) {
+      for (const hour of hours) {
+        if (schedule[day]?.[className]?.[hour] === teacherId) {
+          count++;
+        }
+      }
+    }
+
+    return count;
+  }
+
+  function getRemainingHours(className, teacherId) {
+    const required = teachingLoads[className]?.[teacherId] || 0;
+    const scheduled = countScheduledHours(className, teacherId);
+
+    return required - scheduled;
+  }
 
   function hasConflict(currentClass, hour, teacherId) {
     for (const className of classes) {
       if (className === currentClass) continue;
 
-      if (
-        schedule[selectedDay]?.[className]?.[hour] === teacherId
-      ) {
+      if (schedule[selectedDay]?.[className]?.[hour] === teacherId) {
         return true;
       }
     }
@@ -36,19 +55,29 @@ export default function App() {
 
     if (!over) return;
 
-    const teacherId = active.id;
-
+    const teacherId = String(active.id);
     const [className, hour] = over.id.split("-");
+
+    const remaining = getRemainingHours(className, teacherId);
+
+    const currentTeacherInCell = schedule[selectedDay]?.[className]?.[hour];
+
+    // אם אותו מורה כבר נמצא בתא הזה, לא עושים כלום
+    if (currentTeacherInCell === teacherId) {
+      return;
+    }
+
+    if (remaining <= 0) {
+      alert("אין למורה הזה שעות שנותרו לשיבוץ בכיתה זו");
+      return;
+    }
 
     setSchedule((prev) => ({
       ...prev,
-
       [selectedDay]: {
         ...prev[selectedDay],
-
         [className]: {
           ...prev[selectedDay]?.[className],
-
           [hour]: teacherId,
         },
       },
@@ -81,10 +110,7 @@ export default function App() {
             <h2>מורים</h2>
 
             {teachers.map((teacher) => (
-              <DraggableTeacher
-                key={teacher.id}
-                teacher={teacher}
-              />
+              <DraggableTeacher key={teacher.id} teacher={teacher} />
             ))}
           </div>
 
@@ -92,7 +118,7 @@ export default function App() {
             <thead>
               <tr>
                 <th>כיתה</th>
-
+                <th>מחסן שעות</th>
                 {hours.map((hour) => (
                   <th key={hour}>שעה {hour}</th>
                 ))}
@@ -102,27 +128,39 @@ export default function App() {
             <tbody>
               {classes.map((className) => (
                 <tr key={className}>
-                  <td className="class-name">
-                    {className}
+                  <td className="class-name">{className}</td>
+
+                  <td className="load-cell">
+                    {Object.entries(teachingLoads[className] || {}).map(
+                      ([teacherId]) => {
+                        const teacher = teachers.find(
+                          (t) => t.id === teacherId
+                        );
+
+                        const remaining = getRemainingHours(
+                          className,
+                          teacherId
+                        );
+
+                        if (remaining <= 0) return null;
+
+                        return (
+                          <div key={teacherId} className="load-item">
+                            {teacher?.name} × {remaining}
+                          </div>
+                        );
+                      }
+                    )}
                   </td>
 
                   {hours.map((hour) => {
                     const teacherId =
-                      schedule[selectedDay]?.[className]?.[
-                        hour
-                      ];
+                      schedule[selectedDay]?.[className]?.[hour];
 
-                    const teacher = teachers.find(
-                      (t) => t.id === teacherId
-                    );
+                    const teacher = teachers.find((t) => t.id === teacherId);
 
                     const conflict =
-                      teacherId &&
-                      hasConflict(
-                        className,
-                        hour,
-                        teacherId
-                      );
+                      teacherId && hasConflict(className, hour, teacherId);
 
                     return (
                       <DroppableCell
