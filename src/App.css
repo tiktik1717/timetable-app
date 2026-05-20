@@ -90,7 +90,7 @@ th {
   padding: 4px;
 }
 
-.load-cell > div {
+.load-cell>div {
   display: inline-flex;
   margin: 2px;
 }
@@ -168,4 +168,31 @@ th {
   background: #ffe0b2;
   outline: 2px dashed #fb8c00;
   outline-offset: -4px;
+}
+
+.load-teacher-code {
+  font-weight: bold;
+}
+
+.load-count {
+  font-weight: normal;
+}
+
+.load-placements {
+  font-size: 11px;
+  color: #555;
+}
+
+.load-item-empty {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.clear-button {
+  padding: 7px 12px;
+  border: none;
+  background: #d32f2f;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
 }

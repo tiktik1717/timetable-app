@@ -16,10 +16,24 @@ import {
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
-  const [schedule, setSchedule] = useState({});
+
+  const [schedule, setSchedule] = useState(() => {
+    const savedSchedule = localStorage.getItem("schoolSchedule");
+
+    if (savedSchedule) {
+      return JSON.parse(savedSchedule);
+    }
+
+    return {};
+  });
+
   const [selectedCell, setSelectedCell] = useState(null);
   const [ctrlPressed, setCtrlPressed] = useState(false);
   const [displayMode, setDisplayMode] = useState("names");
+
+  useEffect(() => {
+    localStorage.setItem("schoolSchedule", JSON.stringify(schedule));
+  }, [schedule]);
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -61,6 +75,20 @@ export default function App() {
     const required = teachingLoads[className]?.[teacherId] || 0;
     const scheduled = countScheduledHours(className, teacherId);
     return required - scheduled;
+  }
+
+  function getTeacherPlacements(className, teacherId) {
+    const placements = [];
+
+    for (const day of days) {
+      for (const hour of hours) {
+        if (schedule[day]?.[className]?.[hour] === teacherId) {
+          placements.push(`${day}:${hour}`);
+        }
+      }
+    }
+
+    return placements;
   }
 
   function hasConflict(currentClass, hour, teacherId) {
@@ -132,54 +160,54 @@ export default function App() {
     });
   }
 
-function handleDragEnd(event) {
-  const { active, over } = event;
-  if (!over) return;
+  function handleDragEnd(event) {
+    const { active, over } = event;
+    if (!over) return;
 
-  const data = active.data.current;
-  const overData = over.data.current;
+    const data = active.data.current;
+    const overData = over.data.current;
 
-  if (data?.source === "cell" && overData?.source === "loadCell") {
-    if (data.fromClass !== overData.className) {
-      alert("אפשר להחזיר מורה רק למחסן של אותה כיתה");
+    if (data?.source === "cell" && overData?.source === "loadCell") {
+      if (data.fromClass !== overData.className) {
+        alert("אפשר להחזיר מורה רק למחסן של אותה כיתה");
+        return;
+      }
+
+      removeTeacherFromCell(data.fromClass, data.fromHour);
       return;
     }
 
-    removeTeacherFromCell(data.fromClass, data.fromHour);
-    return;
-  }
+    const [toClass, toHour] = over.id.split("-");
 
-  const [toClass, toHour] = over.id.split("-");
-
-  if (data?.source === "cell") {
-    moveTeacherWithinRow(
-      data.fromClass,
-      data.fromHour,
-      toClass,
-      toHour,
-      data.teacherId
-    );
-    return;
-  }
-
-  if (data?.source === "load") {
-    const teacherId = String(data.teacherId);
-
-    if (data.className !== toClass) {
-      alert("אפשר לשבץ מורה רק בשורה של הכיתה שממנה נגרר במחסן השעות");
+    if (data?.source === "cell") {
+      moveTeacherWithinRow(
+        data.fromClass,
+        data.fromHour,
+        toClass,
+        toHour,
+        data.teacherId
+      );
       return;
     }
 
-    const remaining = getRemainingHours(toClass, teacherId);
+    if (data?.source === "load") {
+      const teacherId = String(data.teacherId);
 
-    if (remaining <= 0) {
-      alert("אין למורה הזה שעות שנותרו לשיבוץ בכיתה זו");
-      return;
+      if (data.className !== toClass) {
+        alert("אפשר לשבץ מורה רק בשורה של הכיתה שממנה נגרר במחסן השעות");
+        return;
+      }
+
+      const remaining = getRemainingHours(toClass, teacherId);
+
+      if (remaining <= 0) {
+        alert("אין למורה הזה שעות שנותרו לשיבוץ בכיתה זו");
+        return;
+      }
+
+      placeTeacherInCell(toClass, toHour, teacherId);
     }
-
-    placeTeacherInCell(toClass, toHour, teacherId);
   }
-}
 
   return (
     <DndContext onDragEnd={handleDragEnd}>
@@ -216,6 +244,18 @@ function handleDragEnd(event) {
               <option value="codes">קודים</option>
             </select>
           </label>
+
+          <button
+            className="clear-button"
+            onClick={() => {
+              if (confirm("האם למחוק את כל השיבוצים?")) {
+                setSchedule({});
+                localStorage.removeItem("schoolSchedule");
+              }
+            }}
+          >
+            נקה מערכת
+          </button>
         </div>
 
         <table>
@@ -240,7 +280,6 @@ function handleDragEnd(event) {
                       const teacher = teachers.find((t) => t.id === teacherId);
                       const remaining = getRemainingHours(className, teacherId);
 
-                      if (remaining <= 0) return null;
 
                       return (
                         <LoadItem
@@ -249,6 +288,7 @@ function handleDragEnd(event) {
                           teacherId={teacherId}
                           teacher={teacher}
                           remaining={remaining}
+                          placements={getTeacherPlacements(className, teacherId)}
                           displayMode={displayMode}
                         />
                       );
