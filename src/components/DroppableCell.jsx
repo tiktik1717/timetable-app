@@ -7,6 +7,7 @@ export default function DroppableCell({
   teacherId,
   conflict,
   selected,
+  displayMode,
   onClick,
 }) {
   const cellId = `${className}-${hour}`;
@@ -23,6 +24,7 @@ export default function DroppableCell({
   } = useDraggable({
     id: `cell-${className}-${hour}`,
     data: {
+      source: "cell",
       fromClass: className,
       fromHour: String(hour),
       teacherId,
@@ -43,7 +45,7 @@ export default function DroppableCell({
         conflict ? "conflict" : "",
         selected ? "selected-cell" : "",
       ].join(" ")}
-      onClick={onClick}
+      onMouseDown={onClick}
     >
       {teacher ? (
         <div
@@ -53,7 +55,7 @@ export default function DroppableCell({
           {...attributes}
           className="cell-teacher"
         >
-          {teacher.name}
+          {displayMode === "names" ? teacher.name : teacherId}
         </div>
       ) : null}
     </td>

@@ -117,3 +117,36 @@ th {
   color: #555;
   line-height: 1.5;
 }
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 16px;
+}
+
+.display-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: bold;
+}
+
+.display-mode select {
+  padding: 6px 10px;
+}
+
+.return-zone {
+  width: 260px;
+  padding: 14px;
+  margin-bottom: 16px;
+  border: 2px dashed #999;
+  background: #fff;
+  text-align: center;
+  border-radius: 8px;
+}
+
+.return-zone-over {
+  background: #ffe0b2;
+  border-color: #fb8c00;
+}
