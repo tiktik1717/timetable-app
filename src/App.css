@@ -150,3 +150,9 @@ th {
   background: #ffe0b2;
   border-color: #fb8c00;
 }
+
+.load-cell-over {
+  background: #ffe0b2;
+  outline: 2px dashed #fb8c00;
+  outline-offset: -4px;
+}

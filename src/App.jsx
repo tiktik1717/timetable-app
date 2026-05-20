@@ -4,7 +4,7 @@ import "./App.css";
 
 import DroppableCell from "./components/DroppableCell";
 import LoadItem from "./components/LoadItem";
-import ReturnToLoadZone from "./components/ReturnToLoadZone";
+import LoadCell from "./components/LoadCell";
 
 import {
   teachers,
@@ -132,50 +132,54 @@ export default function App() {
     });
   }
 
-  function handleDragEnd(event) {
-    const { active, over } = event;
-    if (!over) return;
+function handleDragEnd(event) {
+  const { active, over } = event;
+  if (!over) return;
 
-    const data = active.data.current;
+  const data = active.data.current;
+  const overData = over.data.current;
 
-    if (data?.source === "cell" && over.id === "return-to-load") {
-      removeTeacherFromCell(data.fromClass, data.fromHour);
+  if (data?.source === "cell" && overData?.source === "loadCell") {
+    if (data.fromClass !== overData.className) {
+      alert("אפשר להחזיר מורה רק למחסן של אותה כיתה");
       return;
     }
 
-    if (over.id === "return-to-load") return;
-
-    const [toClass, toHour] = over.id.split("-");
-
-    if (data?.source === "cell") {
-      moveTeacherWithinRow(
-        data.fromClass,
-        data.fromHour,
-        toClass,
-        toHour,
-        data.teacherId
-      );
-      return;
-    }
-
-    if (data?.source === "load") {
-      const teacherId = String(data.teacherId);
-
-      if (data.className !== toClass) {
-        alert("אפשר לשבץ מורה רק בשורה של הכיתה שממנה נגרר במחסן השעות");
-        return;
-      }
-
-      const remaining = getRemainingHours(toClass, teacherId);
-
-      if (remaining <= 0) {
-        alert("אין למורה הזה שעות שנותרו לשיבוץ בכיתה זו");
-        return;
-      }
-
-      placeTeacherInCell(toClass, toHour, teacherId);
-    }
+    removeTeacherFromCell(data.fromClass, data.fromHour);
+    return;
   }
+
+  const [toClass, toHour] = over.id.split("-");
+
+  if (data?.source === "cell") {
+    moveTeacherWithinRow(
+      data.fromClass,
+      data.fromHour,
+      toClass,
+      toHour,
+      data.teacherId
+    );
+    return;
+  }
+
+  if (data?.source === "load") {
+    const teacherId = String(data.teacherId);
+
+    if (data.className !== toClass) {
+      alert("אפשר לשבץ מורה רק בשורה של הכיתה שממנה נגרר במחסן השעות");
+      return;
+    }
+
+    const remaining = getRemainingHours(toClass, teacherId);
+
+    if (remaining <= 0) {
+      alert("אין למורה הזה שעות שנותרו לשיבוץ בכיתה זו");
+      return;
+    }
+
+    placeTeacherInCell(toClass, toHour, teacherId);
+  }
+}
 
   return (
     <DndContext onDragEnd={handleDragEnd}>
@@ -214,8 +218,6 @@ export default function App() {
           </label>
         </div>
 
-        <ReturnToLoadZone />
-
         <table>
           <thead>
             <tr>
@@ -232,7 +234,7 @@ export default function App() {
               <tr key={className}>
                 <td className="class-name">{className}</td>
 
-                <td className="load-cell">
+                <LoadCell className={className}>
                   {Object.entries(teachingLoads[className] || {}).map(
                     ([teacherId]) => {
                       const teacher = teachers.find((t) => t.id === teacherId);
@@ -252,7 +254,7 @@ export default function App() {
                       );
                     }
                   )}
-                </td>
+                </LoadCell>
 
                 {hours.map((hour) => {
                   const teacherId = schedule[selectedDay]?.[className]?.[hour];
