@@ -62,3 +62,22 @@ th {
   background: red;
   color: white;
 }
+
+.days-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.day-button {
+  padding: 10px 16px;
+  border: none;
+  background: #ccc;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.active-day {
+  background: #1976d2;
+  color: white;
+}

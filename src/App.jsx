@@ -4,16 +4,26 @@ import "./App.css";
 
 import DraggableTeacher from "./components/DraggableTeacher";
 import DroppableCell from "./components/DroppableCell";
-import { teachers, classes, hours } from "./data/mockData";
+
+import {
+  teachers,
+  classes,
+  hours,
+  days,
+} from "./data/mockData";
 
 export default function App() {
+  const [selectedDay, setSelectedDay] = useState("א");
+
   const [schedule, setSchedule] = useState({});
 
   function hasConflict(currentClass, hour, teacherId) {
     for (const className of classes) {
       if (className === currentClass) continue;
 
-      if (schedule[className]?.[hour] === teacherId) {
+      if (
+        schedule[selectedDay]?.[className]?.[hour] === teacherId
+      ) {
         return true;
       }
     }
@@ -27,13 +37,20 @@ export default function App() {
     if (!over) return;
 
     const teacherId = active.id;
+
     const [className, hour] = over.id.split("-");
 
     setSchedule((prev) => ({
       ...prev,
-      [className]: {
-        ...prev[className],
-        [hour]: teacherId,
+
+      [selectedDay]: {
+        ...prev[selectedDay],
+
+        [className]: {
+          ...prev[selectedDay]?.[className],
+
+          [hour]: teacherId,
+        },
       },
     }));
   }
@@ -43,12 +60,31 @@ export default function App() {
       <div className="container">
         <h1>מערכת שעות - אב טיפוס</h1>
 
+        <div className="days-bar">
+          {days.map((day) => (
+            <button
+              key={day}
+              className={
+                selectedDay === day
+                  ? "day-button active-day"
+                  : "day-button"
+              }
+              onClick={() => setSelectedDay(day)}
+            >
+              יום {day}
+            </button>
+          ))}
+        </div>
+
         <div className="layout">
           <div className="teachers-panel">
             <h2>מורים</h2>
 
             {teachers.map((teacher) => (
-              <DraggableTeacher key={teacher.id} teacher={teacher} />
+              <DraggableTeacher
+                key={teacher.id}
+                teacher={teacher}
+              />
             ))}
           </div>
 
@@ -56,6 +92,7 @@ export default function App() {
             <thead>
               <tr>
                 <th>כיתה</th>
+
                 {hours.map((hour) => (
                   <th key={hour}>שעה {hour}</th>
                 ))}
@@ -65,15 +102,27 @@ export default function App() {
             <tbody>
               {classes.map((className) => (
                 <tr key={className}>
-                  <td className="class-name">{className}</td>
+                  <td className="class-name">
+                    {className}
+                  </td>
 
                   {hours.map((hour) => {
-                    const teacherId = schedule[className]?.[hour];
+                    const teacherId =
+                      schedule[selectedDay]?.[className]?.[
+                        hour
+                      ];
 
-                    const teacher = teachers.find((t) => t.id === teacherId);
+                    const teacher = teachers.find(
+                      (t) => t.id === teacherId
+                    );
 
                     const conflict =
-                      teacherId && hasConflict(className, hour, teacherId);
+                      teacherId &&
+                      hasConflict(
+                        className,
+                        hour,
+                        teacherId
+                      );
 
                     return (
                       <DroppableCell

@@ -7,3 +7,12 @@ export const teachers = [
 export const classes = ["א1", "א2", "ב1", "ב2"];
 
 export const hours = [1, 2, 3, 4, 5, 6];
+
+export const days = [
+  "א",
+  "ב",
+  "ג",
+  "ד",
+  "ה",
+  "ו",
+];
