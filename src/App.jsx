@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DndContext } from "@dnd-kit/core";
 import "./App.css";
 
@@ -16,6 +16,34 @@ import {
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
   const [schedule, setSchedule] = useState({});
+  const [selectedCell, setSelectedCell] = useState(null);
+  const [ctrlPressed, setCtrlPressed] = useState(false);
+
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === "Control") {
+        setCtrlPressed(true);
+      }
+
+      if (event.key === "Delete" && selectedCell) {
+        removeTeacherFromCell(selectedCell.className, selectedCell.hour);
+      }
+    }
+
+    function handleKeyUp(event) {
+      if (event.key === "Control") {
+        setCtrlPressed(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [selectedCell, schedule, selectedDay]);
 
   function countScheduledHours(className, teacherId) {
     let count = 0;
@@ -50,28 +78,19 @@ export default function App() {
     return false;
   }
 
-  function handleDragEnd(event) {
-    const { active, over } = event;
+  function removeTeacherFromCell(className, hour) {
+    setSchedule((prev) => {
+      const newSchedule = structuredClone(prev);
 
-    if (!over) return;
+      if (newSchedule[selectedDay]?.[className]) {
+        delete newSchedule[selectedDay][className][hour];
+      }
 
-    const teacherId = String(active.id);
-    const [className, hour] = over.id.split("-");
+      return newSchedule;
+    });
+  }
 
-    const remaining = getRemainingHours(className, teacherId);
-
-    const currentTeacherInCell = schedule[selectedDay]?.[className]?.[hour];
-
-    // אם אותו מורה כבר נמצא בתא הזה, לא עושים כלום
-    if (currentTeacherInCell === teacherId) {
-      return;
-    }
-
-    if (remaining <= 0) {
-      alert("אין למורה הזה שעות שנותרו לשיבוץ בכיתה זו");
-      return;
-    }
-
+  function placeTeacherInCell(className, hour, teacherId) {
     setSchedule((prev) => ({
       ...prev,
       [selectedDay]: {
@@ -82,6 +101,76 @@ export default function App() {
         },
       },
     }));
+  }
+
+  function moveTeacherWithinRow(fromClass, fromHour, toClass, toHour, teacherId) {
+    if (fromClass !== toClass) {
+      alert("אפשר לגרור מורה רק בתוך אותה שורה / אותה כיתה");
+      return;
+    }
+
+    if (fromHour === toHour) return;
+
+    const targetTeacherId = schedule[selectedDay]?.[toClass]?.[toHour];
+
+    setSchedule((prev) => {
+      const newSchedule = structuredClone(prev);
+
+      if (!newSchedule[selectedDay]) newSchedule[selectedDay] = {};
+      if (!newSchedule[selectedDay][fromClass]) {
+        newSchedule[selectedDay][fromClass] = {};
+      }
+
+      if (ctrlPressed && targetTeacherId) {
+        // Ctrl + גרירה לתא תפוס = החלפה
+        newSchedule[selectedDay][fromClass][fromHour] = targetTeacherId;
+        newSchedule[selectedDay][toClass][toHour] = teacherId;
+      } else {
+        // גרירה רגילה = דריסה. המורה שהיה ביעד חוזר למחסן אוטומטית
+        delete newSchedule[selectedDay][fromClass][fromHour];
+        newSchedule[selectedDay][toClass][toHour] = teacherId;
+      }
+
+      return newSchedule;
+    });
+  }
+
+  function handleDragEnd(event) {
+    const { active, over } = event;
+
+    if (!over) return;
+
+    const [toClass, toHour] = over.id.split("-");
+
+    const isDragFromCell = String(active.id).startsWith("cell-");
+
+    if (isDragFromCell) {
+      const { fromClass, fromHour, teacherId } = active.data.current;
+
+      moveTeacherWithinRow(
+        fromClass,
+        fromHour,
+        toClass,
+        toHour,
+        teacherId
+      );
+
+      return;
+    }
+
+    const teacherId = String(active.id);
+    const currentTeacherInCell = schedule[selectedDay]?.[toClass]?.[toHour];
+
+    if (currentTeacherInCell === teacherId) return;
+
+    const remaining = getRemainingHours(toClass, teacherId);
+
+    if (remaining <= 0) {
+      alert("אין למורה הזה שעות שנותרו לשיבוץ בכיתה זו");
+      return;
+    }
+
+    placeTeacherInCell(toClass, toHour, teacherId);
   }
 
   return (
@@ -98,7 +187,10 @@ export default function App() {
                   ? "day-button active-day"
                   : "day-button"
               }
-              onClick={() => setSelectedDay(day)}
+              onClick={() => {
+                setSelectedDay(day);
+                setSelectedCell(null);
+              }}
             >
               יום {day}
             </button>
@@ -112,6 +204,10 @@ export default function App() {
             {teachers.map((teacher) => (
               <DraggableTeacher key={teacher.id} teacher={teacher} />
             ))}
+
+            <p className="hint">
+              Delete מוחק תא מסומן. Ctrl + גרירה מתא לתא מבצע החלפה.
+            </p>
           </div>
 
           <table>
@@ -162,13 +258,25 @@ export default function App() {
                     const conflict =
                       teacherId && hasConflict(className, hour, teacherId);
 
+                    const selected =
+                      selectedCell?.className === className &&
+                      selectedCell?.hour === String(hour);
+
                     return (
                       <DroppableCell
                         key={hour}
                         className={className}
                         hour={hour}
                         teacher={teacher}
+                        teacherId={teacherId}
                         conflict={conflict}
+                        selected={selected}
+                        onClick={() =>
+                          setSelectedCell({
+                            className,
+                            hour: String(hour),
+                          })
+                        }
                       />
                     );
                   })}

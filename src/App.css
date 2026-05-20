@@ -96,3 +96,24 @@ th {
   padding: 4px 6px;
   border-radius: 4px;
 }
+
+.cell-teacher {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  user-select: none;
+}
+
+.selected-cell {
+  outline: 3px solid #ff9800;
+  outline-offset: -3px;
+}
+
+.hint {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.5;
+}
