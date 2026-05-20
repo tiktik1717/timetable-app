@@ -1,66 +1,10 @@
 import { useState } from "react";
+import { DndContext } from "@dnd-kit/core";
 import "./App.css";
 
-import {
-  DndContext,
-  useDraggable,
-  useDroppable,
-} from "@dnd-kit/core";
-
-const teachers = [
-  { id: "1", name: "אוחנה תהילה" },
-  { id: "2", name: "כהן רחל" },
-  { id: "3", name: "לוי מיכל" },
-];
-
-const classes = ["א1", "א2", "ב1", "ב2"];
-
-const hours = [1, 2, 3, 4, 5, 6];
-
-function DraggableTeacher({ teacher }) {
-  const { attributes, listeners, setNodeRef, transform } =
-    useDraggable({
-      id: teacher.id,
-    });
-
-  const style = {
-    transform: transform
-      ? `translate(${transform.x}px, ${transform.y}px)`
-      : undefined,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      className="teacher-card"
-    >
-      {teacher.name}
-    </div>
-  );
-}
-
-function DroppableCell({
-  className,
-  hour,
-  teacher,
-  conflict,
-}) {
-  const { setNodeRef } = useDroppable({
-    id: `${className}-${hour}`,
-  });
-
-  return (
-    <td
-      ref={setNodeRef}
-      className={conflict ? "conflict" : ""}
-    >
-      {teacher ? teacher.name : ""}
-    </td>
-  );
-}
+import DraggableTeacher from "./components/DraggableTeacher";
+import DroppableCell from "./components/DroppableCell";
+import { teachers, classes, hours } from "./data/mockData";
 
 export default function App() {
   const [schedule, setSchedule] = useState({});
@@ -83,7 +27,6 @@ export default function App() {
     if (!over) return;
 
     const teacherId = active.id;
-
     const [className, hour] = over.id.split("-");
 
     setSchedule((prev) => ({
@@ -105,10 +48,7 @@ export default function App() {
             <h2>מורים</h2>
 
             {teachers.map((teacher) => (
-              <DraggableTeacher
-                key={teacher.id}
-                teacher={teacher}
-              />
+              <DraggableTeacher key={teacher.id} teacher={teacher} />
             ))}
           </div>
 
@@ -116,7 +56,6 @@ export default function App() {
             <thead>
               <tr>
                 <th>כיתה</th>
-
                 {hours.map((hour) => (
                   <th key={hour}>שעה {hour}</th>
                 ))}
@@ -126,25 +65,15 @@ export default function App() {
             <tbody>
               {classes.map((className) => (
                 <tr key={className}>
-                  <td className="class-name">
-                    {className}
-                  </td>
+                  <td className="class-name">{className}</td>
 
                   {hours.map((hour) => {
-                    const teacherId =
-                      schedule[className]?.[hour];
+                    const teacherId = schedule[className]?.[hour];
 
-                    const teacher = teachers.find(
-                      (t) => t.id === teacherId
-                    );
+                    const teacher = teachers.find((t) => t.id === teacherId);
 
                     const conflict =
-                      teacherId &&
-                      hasConflict(
-                        className,
-                        hour,
-                        teacherId
-                      );
+                      teacherId && hasConflict(className, hour, teacherId);
 
                     return (
                       <DroppableCell
