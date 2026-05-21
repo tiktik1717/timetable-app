@@ -84,8 +84,7 @@ th {
 }
 
 .load-cell {
-  width: 260px;
-  max-width: 260px;
+  min-width: 260px;
   background: #fafafa;
   padding: 4px;
 }
@@ -195,4 +194,20 @@ th {
   color: white;
   border-radius: 6px;
   cursor: pointer;
+}
+
+.table-scroll-wrapper {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-width: 100%;
+  border: 1px solid #ccc;
+}
+
+/* פס גלילה גם למעלה */
+.table-scroll-wrapper {
+  direction: ltr;
+}
+
+.table-scroll-wrapper table {
+  direction: rtl;
 }

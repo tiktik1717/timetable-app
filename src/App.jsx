@@ -258,78 +258,81 @@ export default function App() {
           </button>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>כיתה</th>
-              <th>מחסן שעות</th>
-              {hours.map((hour) => (
-                <th key={hour}>שעה {hour}</th>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {classes.map((className) => (
-              <tr key={className}>
-                <td className="class-name">{className}</td>
-
-                <LoadCell className={className}>
-                  {Object.entries(teachingLoads[className] || {}).map(
-                    ([teacherId]) => {
-                      const teacher = teachers.find((t) => t.id === teacherId);
-                      const remaining = getRemainingHours(className, teacherId);
-
-
-                      return (
-                        <LoadItem
-                          key={teacherId}
-                          className={className}
-                          teacherId={teacherId}
-                          teacher={teacher}
-                          remaining={remaining}
-                          placements={getTeacherPlacements(className, teacherId)}
-                          displayMode={displayMode}
-                        />
-                      );
-                    }
-                  )}
-                </LoadCell>
-
-                {hours.map((hour) => {
-                  const teacherId = schedule[selectedDay]?.[className]?.[hour];
-                  const teacher = teachers.find((t) => t.id === teacherId);
-
-                  const conflict =
-                    teacherId && hasConflict(className, hour, teacherId);
-
-                  const selected =
-                    selectedCell?.className === className &&
-                    selectedCell?.hour === String(hour);
-
-                  return (
-                    <DroppableCell
-                      key={hour}
-                      className={className}
-                      hour={hour}
-                      teacher={teacher}
-                      teacherId={teacherId}
-                      conflict={conflict}
-                      selected={selected}
-                      displayMode={displayMode}
-                      onClick={() =>
-                        setSelectedCell({
-                          className,
-                          hour: String(hour),
-                        })
-                      }
-                    />
-                  );
-                })}
+        <div className="table-scroll-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>מחסן שעות</th>
+                <th>כיתה</th>
+                {hours.map((hour) => (
+                  <th key={hour}>שעה {hour}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+
+            <tbody>
+              {classes.map((className) => (
+                <tr key={className}>
+
+                  <LoadCell className={className}>
+                    {Object.entries(teachingLoads[className] || {}).map(
+                      ([teacherId]) => {
+                        const teacher = teachers.find((t) => t.id === teacherId);
+                        const remaining = getRemainingHours(className, teacherId);
+
+
+                        return (
+                          <LoadItem
+                            key={teacherId}
+                            className={className}
+                            teacherId={teacherId}
+                            teacher={teacher}
+                            remaining={remaining}
+                            placements={getTeacherPlacements(className, teacherId)}
+                            displayMode={displayMode}
+                          />
+                        );
+                      }
+                    )}
+                  </LoadCell>
+
+                  <td className="class-name">{className}</td>
+
+                  {hours.map((hour) => {
+                    const teacherId = schedule[selectedDay]?.[className]?.[hour];
+                    const teacher = teachers.find((t) => t.id === teacherId);
+
+                    const conflict =
+                      teacherId && hasConflict(className, hour, teacherId);
+
+                    const selected =
+                      selectedCell?.className === className &&
+                      selectedCell?.hour === String(hour);
+
+                    return (
+                      <DroppableCell
+                        key={hour}
+                        className={className}
+                        hour={hour}
+                        teacher={teacher}
+                        teacherId={teacherId}
+                        conflict={conflict}
+                        selected={selected}
+                        displayMode={displayMode}
+                        onClick={() =>
+                          setSelectedCell({
+                            className,
+                            hour: String(hour),
+                          })
+                        }
+                      />
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         <p className="hint">
           Delete מוחק תא מסומן. גרירה למחסן מוחקת שיבוץ. Ctrl + גרירה מתא לתא
