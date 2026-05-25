@@ -7,6 +7,7 @@ export default function DroppableCell({
   teacherId,
   conflict,
   selected,
+  highlighted,
   displayMode,
   onClick,
 }) {
@@ -44,6 +45,7 @@ export default function DroppableCell({
       className={[
         conflict ? "conflict" : "",
         selected ? "selected-cell" : "",
+        highlighted ? "highlighted-cell" : "",
       ].join(" ")}
       onMouseDown={onClick}
     >

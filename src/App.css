@@ -39,6 +39,8 @@ h1 {
 table {
   border-collapse: collapse;
   background: white;
+  table-layout: auto;
+  width: max-content;
 }
 
 th,
@@ -85,8 +87,10 @@ th {
 
 .load-cell {
   min-width: 260px;
+  width: max-content;
   background: #fafafa;
   padding: 4px;
+  white-space: nowrap;
 }
 
 .load-cell>div {
@@ -104,6 +108,7 @@ th {
   font-size: 12px;
   white-space: nowrap;
   cursor: grab;
+  margin: 2px;
 }
 
 .cell-teacher {
@@ -118,6 +123,7 @@ th {
   white-space: nowrap;
   overflow: hidden;
 }
+
 
 .selected-cell {
   outline: 3px solid #ff9800;
@@ -210,4 +216,27 @@ th {
 
 .table-scroll-wrapper table {
   direction: rtl;
+}
+
+.highlighted-header {
+  background: #fff59d !important;
+}
+
+.highlighted-cell {
+  outline: 3px solid #fbc02d;
+  outline-offset: -3px;
+}
+
+.action-button {
+  padding: 7px 12px;
+  border: none;
+  background: #607d8b;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.action-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

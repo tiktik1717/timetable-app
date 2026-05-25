@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DndContext } from "@dnd-kit/core";
 import "./App.css";
 
@@ -30,6 +30,64 @@ export default function App() {
   const [selectedCell, setSelectedCell] = useState(null);
   const [ctrlPressed, setCtrlPressed] = useState(false);
   const [displayMode, setDisplayMode] = useState("names");
+  const [hoveredCell, setHoveredCell] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [future, setFuture] = useState([]);
+
+  const scheduleRef = useRef(schedule);
+  const historyRef = useRef(history);
+  const futureRef = useRef(future);
+
+  useEffect(() => {
+    scheduleRef.current = schedule;
+  }, [schedule]);
+
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
+
+  useEffect(() => {
+    futureRef.current = future;
+  }, [future]);
+
+  function undo() {
+    const currentHistory = historyRef.current;
+
+    if (currentHistory.length === 0) return;
+
+    const previousSchedule = currentHistory[currentHistory.length - 1];
+    const newHistory = currentHistory.slice(0, -1);
+    const newFuture = [scheduleRef.current, ...futureRef.current];
+
+    setSchedule(previousSchedule);
+    setHistory(newHistory);
+    setFuture(newFuture);
+  }
+
+  function redo() {
+    const currentFuture = futureRef.current;
+
+    if (currentFuture.length === 0) return;
+
+    const nextSchedule = currentFuture[0];
+    const newFuture = currentFuture.slice(1);
+    const newHistory = [...historyRef.current, scheduleRef.current];
+
+    setSchedule(nextSchedule);
+    setHistory(newHistory);
+    setFuture(newFuture);
+  }
+
+  function updateScheduleWithHistory(updater) {
+    const currentSchedule = scheduleRef.current;
+
+    const nextSchedule =
+      typeof updater === "function" ? updater(currentSchedule) : updater;
+
+    setHistory((prevHistory) => [...prevHistory, currentSchedule]);
+    setFuture([]);
+    setSchedule(nextSchedule);
+  }
 
   useEffect(() => {
     localStorage.setItem("schoolSchedule", JSON.stringify(schedule));
@@ -37,6 +95,17 @@ export default function App() {
 
   useEffect(() => {
     function handleKeyDown(event) {
+      if (event.ctrlKey && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        undo();
+        return;
+      }
+
+      if (event.ctrlKey && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        redo();
+        return;
+      }
       if (event.key === "Control") setCtrlPressed(true);
 
       if (event.key === "Delete" && selectedCell) {
@@ -104,7 +173,7 @@ export default function App() {
   }
 
   function removeTeacherFromCell(className, hour) {
-    setSchedule((prev) => {
+    updateScheduleWithHistory((prev) => {
       const newSchedule = structuredClone(prev);
 
       if (newSchedule[selectedDay]?.[className]) {
@@ -118,7 +187,7 @@ export default function App() {
   }
 
   function placeTeacherInCell(className, hour, teacherId) {
-    setSchedule((prev) => ({
+    updateScheduleWithHistory((prev) => ({
       ...prev,
       [selectedDay]: {
         ...prev[selectedDay],
@@ -140,7 +209,7 @@ export default function App() {
 
     const targetTeacherId = schedule[selectedDay]?.[toClass]?.[toHour];
 
-    setSchedule((prev) => {
+    updateScheduleWithHistory((prev) => {
       const newSchedule = structuredClone(prev);
 
       if (!newSchedule[selectedDay]) newSchedule[selectedDay] = {};
@@ -210,7 +279,28 @@ export default function App() {
   }
 
   return (
-    <DndContext onDragEnd={handleDragEnd}>
+    <DndContext
+      onDragOver={(event) => {
+        const overId = event.over?.id;
+
+        if (!overId || String(overId).startsWith("load-cell")) {
+          setHoveredCell(null);
+          return;
+        }
+
+        const [className, hour] = String(overId).split("-");
+
+        setHoveredCell({
+          className,
+          hour: String(hour),
+        });
+      }}
+      onDragEnd={(event) => {
+        setHoveredCell(null);
+        handleDragEnd(event);
+      }}
+      onDragCancel={() => setHoveredCell(null)}
+    >
       <div className="container">
         <h1>מערכת שעות - אב טיפוס</h1>
 
@@ -246,6 +336,22 @@ export default function App() {
           </label>
 
           <button
+            className="action-button"
+            onClick={undo}
+            disabled={history.length === 0}
+          >
+            ביטול פעולה
+          </button>
+
+          <button
+            className="action-button"
+            onClick={redo}
+            disabled={future.length === 0}
+          >
+            בצע שוב
+          </button>
+
+          <button
             className="clear-button"
             onClick={() => {
               if (confirm("האם למחוק את כל השיבוצים?")) {
@@ -265,8 +371,14 @@ export default function App() {
                 <th>מחסן שעות</th>
                 <th>כיתה</th>
                 {hours.map((hour) => (
-                  <th key={hour}>שעה {hour}</th>
-                ))}
+                  <th
+                    key={hour}
+                    className={
+                      hoveredCell?.hour === String(hour) ? "highlighted-header" : ""
+                    }
+                  >
+                    שעה {hour}
+                  </th>))}
               </tr>
             </thead>
 
@@ -296,7 +408,15 @@ export default function App() {
                     )}
                   </LoadCell>
 
-                  <td className="class-name">{className}</td>
+                  <td
+                    className={
+                      hoveredCell?.className === className
+                        ? "class-name highlighted-header"
+                        : "class-name"
+                    }
+                  >
+                    {className}
+                  </td>
 
                   {hours.map((hour) => {
                     const teacherId = schedule[selectedDay]?.[className]?.[hour];
@@ -319,6 +439,10 @@ export default function App() {
                         conflict={conflict}
                         selected={selected}
                         displayMode={displayMode}
+                        highlighted={
+                          hoveredCell?.className === className &&
+                          hoveredCell?.hour === String(hour)
+                        }
                         onClick={() =>
                           setSelectedCell({
                             className,
