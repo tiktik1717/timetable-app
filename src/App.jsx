@@ -95,17 +95,20 @@ export default function App() {
 
   useEffect(() => {
     function handleKeyDown(event) {
-      if (event.ctrlKey && event.key.toLowerCase() === "z") {
+      const key = event.key.toLowerCase();
+
+      if (event.ctrlKey && (key === "z" || key === "ז")) {
         event.preventDefault();
         undo();
         return;
       }
 
-      if (event.ctrlKey && event.key.toLowerCase() === "y") {
+      if (event.ctrlKey && (key === "y" || key === "ט")) {
         event.preventDefault();
         redo();
         return;
       }
+
       if (event.key === "Control") setCtrlPressed(true);
 
       if (event.key === "Delete" && selectedCell) {
