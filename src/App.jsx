@@ -53,6 +53,7 @@ export default function App() {
   const scheduleRef = useRef(schedule);
   const historyRef = useRef(history);
   const futureRef = useRef(future);
+  const tableScrollRef = useRef(null);
 
   useEffect(() => {
     scheduleRef.current = schedule;
@@ -112,6 +113,36 @@ export default function App() {
   useEffect(() => {
     function handleKeyDown(event) {
       const key = event.key.toLowerCase();
+
+      const scrollEl = tableScrollRef.current;
+
+      if (scrollEl) {
+        const step = 40;
+
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          scrollEl.scrollLeft -= step;
+          return;
+        }
+
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          scrollEl.scrollLeft += step;
+          return;
+        }
+
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          scrollEl.scrollTop -= step;
+          return;
+        }
+
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          scrollEl.scrollTop += step;
+          return;
+        }
+      }
 
       if (event.ctrlKey && (key === "z" || key === "ז")) {
         event.preventDefault();
@@ -422,7 +453,11 @@ export default function App() {
           </label>
         </div>
 
-        <div className="table-scroll-wrapper">
+        <div
+          className="table-scroll-wrapper"
+          ref={tableScrollRef}
+          tabIndex={0}
+        >
           <table>
             <thead>
               <tr>
