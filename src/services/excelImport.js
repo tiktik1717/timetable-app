@@ -66,7 +66,8 @@ export function buildDataFromTimetableSheet(importedExcel) {
             name: teacherName,
             educationClass: String(row[educationClassCol] || "").trim(),
             freeDays: String(row[freeDaysCol] || "")
-                .split(",")
+                .replaceAll("יום", "")
+                .split(/[,،\s]+/)
                 .map((day) => day.trim())
                 .filter(Boolean),
         });

@@ -7,6 +7,7 @@ export default function LoadItem({
   remaining,
   placements,
   displayMode,
+  isFreeDay,
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: `load-${className}-${teacherId}`,
@@ -15,7 +16,7 @@ export default function LoadItem({
       className,
       teacherId,
     },
-    disabled: remaining <= 0,
+    disabled: remaining <= 0 || isFreeDay,
   });
 
   const style = {
@@ -32,7 +33,11 @@ export default function LoadItem({
       style={style}
       {...listeners}
       {...attributes}
-      className={remaining <= 0 ? "load-item load-item-empty" : "load-item"}
+      className={[
+        "load-item",
+        remaining <= 0 ? "load-item-empty" : "",
+        isFreeDay ? "load-item-free-day" : "",
+      ].join(" ")}
     >
       <span className="load-teacher-code">{label}</span>
       <span className="load-count"> × {remaining}</span>

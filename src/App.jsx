@@ -35,6 +35,7 @@ export default function App() {
   const [selectedCell, setSelectedCell] = useState(null);
   const [ctrlPressed, setCtrlPressed] = useState(false);
   const [displayMode, setDisplayMode] = useState("names");
+  const [showFreeDayTeachers, setShowFreeDayTeachers] = useState(true);
   const [hoveredCell, setHoveredCell] = useState(null);
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
@@ -222,6 +223,26 @@ export default function App() {
     return false;
   }
 
+  function normalizeDay(value) {
+    return String(value)
+      .replaceAll("יום", "")
+      .replaceAll("'", "")
+      .replaceAll('"', "")
+      .trim();
+  }
+
+  function isTeacherFreeDay(teacherId, day) {
+    const teacher = teachers.find((t) => t.id === String(teacherId));
+
+    if (!teacher) return false;
+
+    const currentDay = normalizeDay(day);
+
+    return teacher.freeDays?.some(
+      (freeDay) => normalizeDay(freeDay) === currentDay
+    );
+  }
+
   function removeTeacherFromCell(className, hour) {
     updateScheduleWithHistory((prev) => {
       const newSchedule = structuredClone(prev);
@@ -252,6 +273,11 @@ export default function App() {
   function moveTeacherWithinRow(fromClass, fromHour, toClass, toHour, teacherId) {
     if (fromClass !== toClass) {
       alert("אפשר לגרור מורה רק בתוך אותה שורה / אותה כיתה");
+      return;
+    }
+
+    if (isTeacherFreeDay(teacherId, selectedDay)) {
+      alert("לא ניתן לשבץ מורה ביום החופשי שלו");
       return;
     }
 
@@ -311,6 +337,11 @@ export default function App() {
 
     if (data?.source === "load") {
       const teacherId = String(data.teacherId);
+
+      if (isTeacherFreeDay(teacherId, selectedDay)) {
+        alert("לא ניתן לשבץ מורה ביום החופשי שלו");
+        return;
+      }
 
       if (data.className !== toClass) {
         alert("אפשר לשבץ מורה רק בשורה של הכיתה שממנה נגרר במחסן השעות");
@@ -451,6 +482,15 @@ export default function App() {
               hidden
             />
           </label>
+
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={showFreeDayTeachers}
+              onChange={(e) => setShowFreeDayTeachers(e.target.checked)}
+            />
+            הצג מורים ביום חופשי
+          </label>
         </div>
 
         <div
@@ -485,6 +525,9 @@ export default function App() {
                         const teacher = teachers.find((t) => t.id === teacherId);
                         const remaining = getRemainingHours(className, teacherId);
 
+                        const isFreeDay = isTeacherFreeDay(teacherId, selectedDay);
+
+                        if (!showFreeDayTeachers && isFreeDay) return null;
 
                         return (
                           <LoadItem
@@ -495,6 +538,7 @@ export default function App() {
                             remaining={remaining}
                             placements={getTeacherPlacements(className, teacherId)}
                             displayMode={displayMode}
+                            isFreeDay={isFreeDay}
                           />
                         );
                       }

@@ -254,3 +254,25 @@ th {
   border-radius: 6px;
   cursor: pointer;
 }
+
+.load-item-free-day {
+  background: #eeeeee;
+  color: #888;
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.load-item.load-item-free-day {
+  background: #eeeeee;
+  color: #888;
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
