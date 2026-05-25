@@ -240,3 +240,11 @@ th {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+.upload-button {
+  padding: 7px 12px;
+  background: #2e7d32;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+}

@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { DndContext } from "@dnd-kit/core";
+import {
+  readExcelFile,
+  buildDataFromTimetableSheet,
+} from "./services/excelImport";
+
 import "./App.css";
 
 import DroppableCell from "./components/DroppableCell";
@@ -7,11 +12,11 @@ import LoadItem from "./components/LoadItem";
 import LoadCell from "./components/LoadCell";
 
 import {
-  teachers,
-  classes,
-  hours,
-  days,
-  teachingLoads,
+  teachers as mockTeachers,
+  classes as mockClasses,
+  hours as mockHours,
+  days as mockDays,
+  teachingLoads as mockTeachingLoads,
 } from "./data/mockData";
 
 export default function App() {
@@ -33,6 +38,17 @@ export default function App() {
   const [hoveredCell, setHoveredCell] = useState(null);
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
+  const [importedExcel, setImportedExcel] = useState(null);
+  const [schoolData, setSchoolData] = useState({
+    teachers: mockTeachers,
+    classes: mockClasses,
+    hours: mockHours,
+    days: mockDays,
+    teachingLoads: mockTeachingLoads,
+  });
+
+  const { teachers, classes, hours, days, teachingLoads } = schoolData;
+
 
   const scheduleRef = useRef(schedule);
   const historyRef = useRef(history);
@@ -281,6 +297,35 @@ export default function App() {
     }
   }
 
+  async function handleExcelUpload(event) {
+    const file = event.target.files[0];
+
+    if (!file) return;
+
+    try {
+      const result = await readExcelFile(file);
+      const parsedData = buildDataFromTimetableSheet(result);
+
+      console.log("Excel imported:", result);
+      console.log("Parsed school data:", parsedData);
+
+      setImportedExcel(result);
+      setSchoolData(parsedData);
+
+      setSchedule({});
+      setHistory([]);
+      setFuture([]);
+      localStorage.removeItem("schoolSchedule");
+
+      alert(
+        `הייבוא הצליח!\nנטענו ${parsedData.teachers.length} מורים ו-${parsedData.classes.length} כיתות.`
+      );
+    } catch (error) {
+      console.error(error);
+      alert(error.message);
+    }
+  }
+
   return (
     <DndContext
       onDragOver={(event) => {
@@ -365,6 +410,16 @@ export default function App() {
           >
             נקה מערכת
           </button>
+
+          <label className="upload-button">
+            ייבוא Excel
+            <input
+              type="file"
+              accept=".xlsx,.xlsm,.xls"
+              onChange={handleExcelUpload}
+              hidden
+            />
+          </label>
         </div>
 
         <div className="table-scroll-wrapper">
