@@ -80,12 +80,28 @@ export function buildDataFromTimetableSheet(importedExcel) {
             }
         });
     }
+    const teachingUnits = [];
 
+    for (const className of classes) {
+        for (const [teacherId, hours] of Object.entries(teachingLoads[className])) {
+            teachingUnits.push({
+                id: `${className}-${teacherId}-regular`,
+                className,
+                teacherId,
+                subject: "רגיל",
+                hours,
+                constraintGroupId: null,
+                color: null,
+            });
+        }
+    }
+    
     return {
         teachers,
         classes,
         hours: [1, 2, 3, 4, 5, 6],
         days: ["א", "ב", "ג", "ד", "ה", "ו"],
         teachingLoads,
+        teachingUnits,
     };
 }

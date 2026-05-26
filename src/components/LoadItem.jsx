@@ -1,8 +1,7 @@
 import { useDraggable } from "@dnd-kit/core";
 
 export default function LoadItem({
-  className,
-  teacherId,
+  unit,
   teacher,
   remaining,
   placements,
@@ -10,11 +9,11 @@ export default function LoadItem({
   isFreeDay,
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
-    id: `load-${className}-${teacherId}`,
+    id: `load-${unit.id}`,
     data: {
       source: "load",
-      className,
-      teacherId,
+      className: unit.className,
+      unitId: unit.id,
     },
     disabled: remaining <= 0 || isFreeDay,
   });
@@ -23,9 +22,16 @@ export default function LoadItem({
     transform: transform
       ? `translate(${transform.x}px, ${transform.y}px)`
       : undefined,
+    backgroundColor:
+      displayMode === "codes" && unit.color ? unit.color : undefined,
   };
 
-  const label = displayMode === "names" ? teacher?.name : teacherId;
+  const label =
+    displayMode === "names"
+      ? unit.subject && unit.subject !== "רגיל"
+        ? `${teacher?.name} / ${unit.subject}`
+        : teacher?.name
+      : unit.teacherId;
 
   return (
     <div
@@ -43,10 +49,7 @@ export default function LoadItem({
       <span className="load-count"> × {remaining}</span>
 
       {placements.length > 0 && (
-        <span className="load-placements">
-          {" "}
-          ({placements.join(", ")})
-        </span>
+        <span className="load-placements"> ({placements.join(", ")})</span>
       )}
     </div>
   );

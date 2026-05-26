@@ -32,3 +32,42 @@ export const teachingLoads = {
     3: 2,
   },
 };
+
+export const teachingUnits = [
+  {
+    id: "א1-1-regular",
+    className: "א1",
+    teacherId: "1",
+    subject: "רגיל",
+    hours: 3,
+    constraintGroupId: null,
+    color: null,
+  },
+  {
+    id: "א1-2-regular",
+    className: "א1",
+    teacherId: "2",
+    subject: "רגיל",
+    hours: 2,
+    constraintGroupId: null,
+    color: null,
+  },
+  {
+    id: "א2-2-regular",
+    className: "א2",
+    teacherId: "2",
+    subject: "רגיל",
+    hours: 3,
+    constraintGroupId: null,
+    color: null,
+  },
+  {
+    id: "א2-3-regular",
+    className: "א2",
+    teacherId: "3",
+    subject: "רגיל",
+    hours: 2,
+    constraintGroupId: null,
+    color: null,
+  },
+];

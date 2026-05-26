@@ -10,6 +10,7 @@ export default function DroppableCell({
   highlighted,
   displayMode,
   onClick,
+  unit,
 }) {
   const cellId = `${className}-${hour}`;
 
@@ -28,7 +29,7 @@ export default function DroppableCell({
       source: "cell",
       fromClass: className,
       fromHour: String(hour),
-      teacherId,
+      unitId: unit?.id,
     },
     disabled: !teacherId,
   });
@@ -57,7 +58,11 @@ export default function DroppableCell({
           {...attributes}
           className="cell-teacher"
         >
-          {displayMode === "names" ? teacher.name : teacherId}
+          {displayMode === "names"
+            ? unit?.subject && unit.subject !== "רגיל"
+              ? `${teacher.name} / ${unit.subject}`
+              : teacher.name
+            : teacherId}
         </div>
       ) : null}
     </td>

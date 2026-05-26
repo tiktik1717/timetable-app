@@ -17,6 +17,7 @@ import {
   hours as mockHours,
   days as mockDays,
   teachingLoads as mockTeachingLoads,
+  teachingUnits as mockTeachingUnits,
 } from "./data/mockData";
 
 export default function App() {
@@ -50,24 +51,36 @@ export default function App() {
   const [importedExcel, setImportedExcel] = useState(null);
 
   const [schoolData, setSchoolData] = useState(() => {
-    const savedSchoolData =
-      localStorage.getItem("schoolData");
-
-    if (savedSchoolData) {
-      return JSON.parse(savedSchoolData);
-    }
-
-    return {
+    const defaultData = {
       teachers: mockTeachers,
       classes: mockClasses,
       hours: mockHours,
       days: mockDays,
       teachingLoads: mockTeachingLoads,
+      teachingUnits: mockTeachingUnits,
     };
+
+    const savedSchoolData =
+      localStorage.getItem("schoolData");
+
+    if (savedSchoolData) {
+      return {
+        ...defaultData,
+        ...JSON.parse(savedSchoolData),
+      };
+    }
+
+    return defaultData;
   });
 
-  const { teachers, classes, hours, days, teachingLoads } = schoolData;
-
+  const {
+    teachers,
+    classes,
+    hours,
+    days,
+    teachingLoads,
+    teachingUnits = [],
+  } = schoolData;
 
   const scheduleRef = useRef(schedule);
   const historyRef = useRef(history);
@@ -131,6 +144,14 @@ export default function App() {
       JSON.stringify(schoolData)
     );
   }, [schoolData]);
+
+  function getUnitById(unitId) {
+    return teachingUnits.find((unit) => unit.id === unitId);
+  }
+
+  function getTeacherById(teacherId) {
+    return teachers.find((teacher) => teacher.id === String(teacherId));
+  }
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -198,13 +219,15 @@ export default function App() {
     };
   }, [selectedCell, schedule, selectedDay]);
 
-  function countScheduledHours(className, teacherId) {
+  function countScheduledUnitHours(unitId) {
     let count = 0;
 
     for (const day of days) {
-      for (const hour of hours) {
-        if (schedule[day]?.[className]?.[hour] === teacherId) {
-          count++;
+      for (const className of classes) {
+        for (const hour of hours) {
+          if (schedule[day]?.[className]?.[hour] === unitId) {
+            count++;
+          }
         }
       }
     }
@@ -212,19 +235,23 @@ export default function App() {
     return count;
   }
 
-  function getRemainingHours(className, teacherId) {
-    const required = teachingLoads[className]?.[teacherId] || 0;
-    const scheduled = countScheduledHours(className, teacherId);
-    return required - scheduled;
+  function getRemainingUnitHours(unitId) {
+    const unit = getUnitById(unitId);
+
+    if (!unit) return 0;
+
+    return unit.hours - countScheduledUnitHours(unitId);
   }
 
-  function getTeacherPlacements(className, teacherId) {
+  function getUnitPlacements(unitId) {
     const placements = [];
 
     for (const day of days) {
-      for (const hour of hours) {
-        if (schedule[day]?.[className]?.[hour] === teacherId) {
-          placements.push(`${day}:${hour}`);
+      for (const className of classes) {
+        for (const hour of hours) {
+          if (schedule[day]?.[className]?.[hour] === unitId) {
+            placements.push(`${day}:${hour}`);
+          }
         }
       }
     }
@@ -278,14 +305,14 @@ export default function App() {
     setSelectedCell(null);
   }
 
-  function placeTeacherInCell(className, hour, teacherId) {
+  function placeUnitInCell(className, hour, unitId) {
     updateScheduleWithHistory((prev) => ({
       ...prev,
       [selectedDay]: {
         ...prev[selectedDay],
         [className]: {
           ...prev[selectedDay]?.[className],
-          [hour]: teacherId,
+          [hour]: unitId,
         },
       },
     }));
@@ -357,26 +384,28 @@ export default function App() {
     }
 
     if (data?.source === "load") {
-      const teacherId = String(data.teacherId);
+      const unit = getUnitById(data.unitId);
 
-      if (isTeacherFreeDay(teacherId, selectedDay)) {
+      if (!unit) return;
+
+      if (unit.className !== toClass) {
+        alert("אפשר לשבץ רק בשורה של הכיתה שממנה נגררה השעה");
+        return;
+      }
+
+      if (isTeacherFreeDay(unit.teacherId, selectedDay)) {
         alert("לא ניתן לשבץ מורה ביום החופשי שלו");
         return;
       }
 
-      if (data.className !== toClass) {
-        alert("אפשר לשבץ מורה רק בשורה של הכיתה שממנה נגרר במחסן השעות");
-        return;
-      }
-
-      const remaining = getRemainingHours(toClass, teacherId);
+      const remaining = getRemainingUnitHours(unit.id);
 
       if (remaining <= 0) {
-        alert("אין למורה הזה שעות שנותרו לשיבוץ בכיתה זו");
+        alert("אין שעות שנותרו לשיבוץ עבור יחידה זו");
         return;
       }
 
-      placeTeacherInCell(toClass, toHour, teacherId);
+      placeUnitInCell(toClass, toHour, unit.id);
     }
   }
 
@@ -546,29 +575,28 @@ export default function App() {
                 <tr key={className}>
 
                   <LoadCell className={className}>
-                    {Object.entries(teachingLoads[className] || {}).map(
-                      ([teacherId]) => {
-                        const teacher = teachers.find((t) => t.id === teacherId);
-                        const remaining = getRemainingHours(className, teacherId);
-
-                        const isFreeDay = isTeacherFreeDay(teacherId, selectedDay);
+                    {teachingUnits
+                      .filter((unit) => unit.className === className)
+                      .map((unit) => {
+                        const teacher = getTeacherById(unit.teacherId);
+                        const remaining = getRemainingUnitHours(unit.id);
+                        const isFreeDay = isTeacherFreeDay(unit.teacherId, selectedDay);
 
                         if (!showFreeDayTeachers && isFreeDay) return null;
 
                         return (
                           <LoadItem
-                            key={teacherId}
-                            className={className}
-                            teacherId={teacherId}
+                            key={unit.id}
+                            unit={unit}
                             teacher={teacher}
                             remaining={remaining}
-                            placements={getTeacherPlacements(className, teacherId)}
+                            placements={getUnitPlacements(unit.id)}
                             displayMode={displayMode}
                             isFreeDay={isFreeDay}
                           />
                         );
-                      }
-                    )}
+                      })
+                    }
                   </LoadCell>
 
                   <td
@@ -582,8 +610,10 @@ export default function App() {
                   </td>
 
                   {hours.map((hour) => {
-                    const teacherId = schedule[selectedDay]?.[className]?.[hour];
-                    const teacher = teachers.find((t) => t.id === teacherId);
+                    const unitId = schedule[selectedDay]?.[className]?.[hour];
+                    const unit = getUnitById(unitId);
+                    const teacher = unit ? getTeacherById(unit.teacherId) : null;
+                    const teacherId = unit?.teacherId;
 
                     const conflict =
                       teacherId && hasConflict(className, hour, teacherId);
@@ -602,6 +632,9 @@ export default function App() {
                         conflict={conflict}
                         selected={selected}
                         displayMode={displayMode}
+                        unit={unit}
+                        teacher={teacher}
+                        teacherId={teacherId}
                         highlighted={
                           hoveredCell?.className === className &&
                           hoveredCell?.hour === String(hour)
