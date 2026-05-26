@@ -71,3 +71,18 @@ export const teachingUnits = [
     color: null,
   },
 ];
+
+export const constraintGroups = [
+  {
+    id: "english-a",
+    name: "אנגלית שכבה א",
+    color: "#ffd54f",
+    type: "sameTime",
+  },
+  {
+    id: "computer-room",
+    name: "חדר מחשבים",
+    color: "#64b5f6",
+    type: "notSameTime",
+  },
+];

@@ -276,3 +276,52 @@ th {
   text-decoration: line-through;
   cursor: not-allowed;
 }
+
+.constraint-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #ccc;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.constraint-panel h3 {
+  margin: 0 0 0 12px;
+  font-size: 14px;
+}
+
+.constraint-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #ddd;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fafafa;
+  font-size: 12px;
+}
+
+.constraint-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid #999;
+}
+
+.constraint-name {
+  font-weight: bold;
+}
+
+.constraint-type {
+  color: #666;
+}
+
+.empty-constraints {
+  color: #777;
+  font-size: 13px;
+}

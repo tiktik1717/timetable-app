@@ -10,7 +10,7 @@ import "./App.css";
 import DroppableCell from "./components/DroppableCell";
 import LoadItem from "./components/LoadItem";
 import LoadCell from "./components/LoadCell";
-
+import ConstraintGroupsPanel from "./components/ConstraintGroupsPanel";
 import {
   teachers as mockTeachers,
   classes as mockClasses,
@@ -18,6 +18,7 @@ import {
   days as mockDays,
   teachingLoads as mockTeachingLoads,
   teachingUnits as mockTeachingUnits,
+  constraintGroups as mockConstraintGroups,
 } from "./data/mockData";
 
 export default function App() {
@@ -58,6 +59,7 @@ export default function App() {
       days: mockDays,
       teachingLoads: mockTeachingLoads,
       teachingUnits: mockTeachingUnits,
+      constraintGroups: mockConstraintGroups,
     };
 
     const savedSchoolData =
@@ -80,6 +82,7 @@ export default function App() {
     days,
     teachingLoads,
     teachingUnits = [],
+    constraintGroups = [],
   } = schoolData;
 
   const scheduleRef = useRef(schedule);
@@ -263,7 +266,10 @@ export default function App() {
     for (const className of classes) {
       if (className === currentClass) continue;
 
-      if (schedule[selectedDay]?.[className]?.[hour] === teacherId) {
+      const otherUnitId = schedule[selectedDay]?.[className]?.[hour];
+      const otherUnit = getUnitById(otherUnitId);
+
+      if (otherUnit?.teacherId === teacherId) {
         return true;
       }
     }
@@ -318,20 +324,13 @@ export default function App() {
     }));
   }
 
-  function moveTeacherWithinRow(fromClass, fromHour, toClass, toHour, teacherId) {
+  function moveUnitWithinRow(fromClass, fromHour, toClass, toHour, unitId) {
     if (fromClass !== toClass) {
       alert("אפשר לגרור מורה רק בתוך אותה שורה / אותה כיתה");
       return;
     }
 
-    if (isTeacherFreeDay(teacherId, selectedDay)) {
-      alert("לא ניתן לשבץ מורה ביום החופשי שלו");
-      return;
-    }
-
     if (fromHour === toHour) return;
-
-    const targetTeacherId = schedule[selectedDay]?.[toClass]?.[toHour];
 
     updateScheduleWithHistory((prev) => {
       const newSchedule = structuredClone(prev);
@@ -341,15 +340,22 @@ export default function App() {
         newSchedule[selectedDay][fromClass] = {};
       }
 
-      if (ctrlPressed && targetTeacherId) {
-        newSchedule[selectedDay][fromClass][fromHour] = targetTeacherId;
-        newSchedule[selectedDay][toClass][toHour] = teacherId;
+      const targetUnitId = newSchedule[selectedDay]?.[toClass]?.[toHour];
+
+      if (ctrlPressed && targetUnitId) {
+        newSchedule[selectedDay][fromClass][fromHour] = targetUnitId;
+        newSchedule[selectedDay][toClass][toHour] = unitId;
       } else {
         delete newSchedule[selectedDay][fromClass][fromHour];
-        newSchedule[selectedDay][toClass][toHour] = teacherId;
+        newSchedule[selectedDay][toClass][toHour] = unitId;
       }
 
       return newSchedule;
+    });
+
+    setSelectedCell({
+      className: toClass,
+      hour: String(toHour),
     });
   }
 
@@ -373,12 +379,12 @@ export default function App() {
     const [toClass, toHour] = over.id.split("-");
 
     if (data?.source === "cell") {
-      moveTeacherWithinRow(
+      moveUnitWithinRow(
         data.fromClass,
         data.fromHour,
         toClass,
         toHour,
-        data.teacherId
+        data.unitId
       );
       return;
     }
@@ -548,6 +554,8 @@ export default function App() {
           </label>
         </div>
 
+        <ConstraintGroupsPanel constraintGroups={constraintGroups} />
+        
         <div
           className="table-scroll-wrapper"
           ref={tableScrollRef}
