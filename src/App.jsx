@@ -26,11 +26,19 @@ export default function App() {
     const savedSchedule = localStorage.getItem("schoolSchedule");
 
     if (savedSchedule) {
-      return JSON.parse(savedSchedule);
+      try {
+        return JSON.parse(savedSchedule);
+      } catch {
+        return {};
+      }
     }
 
     return {};
   });
+
+  useEffect(() => {
+    localStorage.setItem("schoolSchedule", JSON.stringify(schedule));
+  }, [schedule]);
 
   const [selectedCell, setSelectedCell] = useState(null);
   const [ctrlPressed, setCtrlPressed] = useState(false);
@@ -40,12 +48,22 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
   const [importedExcel, setImportedExcel] = useState(null);
-  const [schoolData, setSchoolData] = useState({
-    teachers: mockTeachers,
-    classes: mockClasses,
-    hours: mockHours,
-    days: mockDays,
-    teachingLoads: mockTeachingLoads,
+
+  const [schoolData, setSchoolData] = useState(() => {
+    const savedSchoolData =
+      localStorage.getItem("schoolData");
+
+    if (savedSchoolData) {
+      return JSON.parse(savedSchoolData);
+    }
+
+    return {
+      teachers: mockTeachers,
+      classes: mockClasses,
+      hours: mockHours,
+      days: mockDays,
+      teachingLoads: mockTeachingLoads,
+    };
   });
 
   const { teachers, classes, hours, days, teachingLoads } = schoolData;
@@ -108,8 +126,11 @@ export default function App() {
   }
 
   useEffect(() => {
-    localStorage.setItem("schoolSchedule", JSON.stringify(schedule));
-  }, [schedule]);
+    localStorage.setItem(
+      "schoolData",
+      JSON.stringify(schoolData)
+    );
+  }, [schoolData]);
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -373,7 +394,10 @@ export default function App() {
 
       setImportedExcel(result);
       setSchoolData(parsedData);
-
+      localStorage.setItem(
+        "schoolData",
+        JSON.stringify(parsedData)
+      );
       setSchedule({});
       setHistory([]);
       setFuture([]);
@@ -466,6 +490,8 @@ export default function App() {
             onClick={() => {
               if (confirm("האם למחוק את כל השיבוצים?")) {
                 setSchedule({});
+                setHistory([]);
+                setFuture([]);
                 localStorage.removeItem("schoolSchedule");
               }
             }}
