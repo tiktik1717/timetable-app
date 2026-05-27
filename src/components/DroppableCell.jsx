@@ -3,21 +3,22 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 export default function DroppableCell({
   className,
   hour,
-  teacher,
-  teacherId,
-  conflict,
+  units,
+  teachersByUnit,
+  groupsByUnit,
+  conflictingTeacherIds,
   selected,
   highlighted,
   displayMode,
   onClick,
-  unit,
-  group,
 }) {
   const cellId = `${className}-${hour}`;
 
   const { setNodeRef: setDroppableRef } = useDroppable({
     id: cellId,
   });
+
+  const firstUnit = units[0];
 
   const {
     attributes,
@@ -30,49 +31,67 @@ export default function DroppableCell({
       source: "cell",
       fromClass: className,
       fromHour: String(hour),
-      unitId: unit?.id,
+      unitIds: units.map((unit) => unit.id),
     },
-    disabled: !teacherId,
+    disabled: units.length === 0,
   });
-
-  const style = {
-    transform: transform
-      ? `translate(${transform.x}px, ${transform.y}px)`
-      : undefined,
-  };
 
   const teacherStyle = {
     transform: transform
       ? `translate(${transform.x}px, ${transform.y}px)`
       : undefined,
-    backgroundColor: group?.color || undefined,
   };
+
+  const hasConflict = conflictingTeacherIds.length > 0;
 
   return (
     <td
       ref={setDroppableRef}
       className={[
-        conflict ? "conflict" : "",
+        hasConflict ? "conflict" : "",
         selected ? "selected-cell" : "",
         highlighted ? "highlighted-cell" : "",
       ].join(" ")}
       onMouseDown={onClick}
     >
-      {teacher ? (
+      {units.length > 0 && (
         <div
           ref={setDraggableRef}
           style={teacherStyle}
           {...listeners}
           {...attributes}
-          className="cell-teacher"
+          className="cell-stack"
         >
-          {displayMode === "names"
-            ? unit?.subject && unit.subject !== "רגיל"
-              ? `${teacher.name} / ${unit.subject}`
-              : teacher.name
-            : teacherId}
+          {units.map((unit) => {
+            const teacher = teachersByUnit[unit.id];
+            const group = groupsByUnit[unit.id];
+            const isConflicting = conflictingTeacherIds.includes(
+              unit.teacherId
+            );
+
+            return (
+              <div
+                key={unit.id}
+                data-unit-id={unit.id}
+                className={
+                  isConflicting
+                    ? "cell-teacher cell-teacher-conflict"
+                    : "cell-teacher"
+                }
+                style={{
+                  backgroundColor: group?.color || undefined,
+                }}
+              >
+                {displayMode === "names"
+                  ? unit.subject && unit.subject !== "רגיל"
+                    ? `${teacher?.name} / ${unit.subject}`
+                    : teacher?.name
+                  : unit.teacherId}
+              </div>
+            );
+          })}
         </div>
-      ) : null}
+      )}
     </td>
   );
 }

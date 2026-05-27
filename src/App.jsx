@@ -44,6 +44,7 @@ export default function App() {
 
   const [selectedCell, setSelectedCell] = useState(null);
   const [ctrlPressed, setCtrlPressed] = useState(false);
+  const [shiftPressed, setShiftPressed] = useState(false);
   const [displayMode, setDisplayMode] = useState("names");
   const [showFreeDayTeachers, setShowFreeDayTeachers] = useState(true);
   const [hoveredCell, setHoveredCell] = useState(null);
@@ -51,6 +52,7 @@ export default function App() {
   const [future, setFuture] = useState([]);
   const [importedExcel, setImportedExcel] = useState(null);
   const [groupDialogUnit, setGroupDialogUnit] = useState(null);
+  const [singleDragUnitId, setSingleDragUnitId] = useState(null);
   const [schoolData, setSchoolData] = useState(() => {
     const defaultData = {
       teachers: mockTeachers,
@@ -220,6 +222,8 @@ export default function App() {
 
       if (event.key === "Control") setCtrlPressed(true);
 
+      if (event.key === "Shift") setShiftPressed(true);
+
       if (event.key === "Delete" && selectedCell) {
         removeTeacherFromCell(selectedCell.className, selectedCell.hour);
       }
@@ -227,6 +231,7 @@ export default function App() {
 
     function handleKeyUp(event) {
       if (event.key === "Control") setCtrlPressed(false);
+      if (event.key === "Shift") setShiftPressed(false);
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -248,7 +253,7 @@ export default function App() {
     for (const day of days) {
       for (const className of classes) {
         for (const hour of hours) {
-          if (schedule[day]?.[className]?.[hour] === unitId) {
+          if (getCellUnitIds(day, className, hour).includes(unitId)) {
             count++;
           }
         }
@@ -264,6 +269,25 @@ export default function App() {
     if (!unit) return 0;
 
     return unit.hours - countScheduledUnitHours(unitId);
+  }
+
+  function getCellUnitIds(day, className, hour) {
+    const value = schedule[day]?.[className]?.[hour];
+
+    if (!value) return [];
+
+    return Array.isArray(value) ? value : [value];
+  }
+
+  function setCellUnitIds(draftSchedule, day, className, hour, unitIds) {
+    if (!draftSchedule[day]) draftSchedule[day] = {};
+    if (!draftSchedule[day][className]) draftSchedule[day][className] = {};
+
+    if (unitIds.length === 0) {
+      delete draftSchedule[day][className][hour];
+    } else {
+      draftSchedule[day][className][hour] = unitIds;
+    }
   }
 
   function getUnitPlacements(unitId) {
@@ -282,16 +306,18 @@ export default function App() {
     return placements;
   }
 
-  function hasConflict(currentClass, hour, teacherId) {
+  function hasTeacherConflict(currentClass, hour, teacherId) {
     for (const className of classes) {
       if (className === currentClass) continue;
 
-      const otherUnitId = schedule[selectedDay]?.[className]?.[hour];
-      const otherUnit = getUnitById(otherUnitId);
+      const otherUnitIds = getCellUnitIds(selectedDay, className, hour);
 
-      if (otherUnit?.teacherId === teacherId) {
-        return true;
-      }
+      const hasSameTeacher = otherUnitIds.some((unitId) => {
+        const otherUnit = getUnitById(unitId);
+        return otherUnit?.teacherId === teacherId;
+      });
+
+      if (hasSameTeacher) return true;
     }
 
     return false;
@@ -331,22 +357,37 @@ export default function App() {
     setSelectedCell(null);
   }
 
-  function placeUnitInCell(className, hour, unitId) {
-    updateScheduleWithHistory((prev) => ({
-      ...prev,
-      [selectedDay]: {
-        ...prev[selectedDay],
-        [className]: {
-          ...prev[selectedDay]?.[className],
-          [hour]: unitId,
-        },
-      },
-    }));
+  function placeUnitInCell(className, hour, unitId, append = false) {
+    updateScheduleWithHistory((prev) => {
+      const newSchedule = structuredClone(prev);
+
+      const currentUnits = getCellUnitIdsFromSchedule(
+        newSchedule,
+        selectedDay,
+        className,
+        hour
+      );
+
+      const nextUnits = append
+        ? [...currentUnits, unitId]
+        : [unitId];
+
+      setCellUnitIds(newSchedule, selectedDay, className, hour, nextUnits);
+
+      return newSchedule;
+    });
   }
 
-  function moveUnitWithinRow(fromClass, fromHour, toClass, toHour, unitId) {
+  function getCellUnitIdsFromSchedule(scheduleObject, day, className, hour) {
+    const value = scheduleObject[day]?.[className]?.[hour];
+
+    if (!value) return [];
+
+    return Array.isArray(value) ? value : [value];
+  }
+  function moveSingleUnitWithinRow(fromClass, fromHour, toClass, toHour, unitId) {
     if (fromClass !== toClass) {
-      alert("אפשר לגרור מורה רק בתוך אותה שורה / אותה כיתה");
+      alert("אפשר לגרור רק בתוך אותה שורה / אותה כיתה");
       return;
     }
 
@@ -355,19 +396,111 @@ export default function App() {
     updateScheduleWithHistory((prev) => {
       const newSchedule = structuredClone(prev);
 
-      if (!newSchedule[selectedDay]) newSchedule[selectedDay] = {};
-      if (!newSchedule[selectedDay][fromClass]) {
-        newSchedule[selectedDay][fromClass] = {};
+      const fromUnits = getCellUnitIdsFromSchedule(
+        newSchedule,
+        selectedDay,
+        fromClass,
+        fromHour
+      );
+
+      const targetUnits = getCellUnitIdsFromSchedule(
+        newSchedule,
+        selectedDay,
+        toClass,
+        toHour
+      );
+
+      const remainingFromUnits = fromUnits.filter((id) => id !== unitId);
+
+      if (ctrlPressed && targetUnits.length > 0) {
+        const newTargetUnits = targetUnits.filter((id) => id !== unitId);
+
+        setCellUnitIds(
+          newSchedule,
+          selectedDay,
+          fromClass,
+          fromHour,
+          [...remainingFromUnits, ...targetUnits]
+        );
+
+        setCellUnitIds(
+          newSchedule,
+          selectedDay,
+          toClass,
+          toHour,
+          [...newTargetUnits, unitId]
+        );
+      } else if (shiftPressed) {
+        setCellUnitIds(
+          newSchedule,
+          selectedDay,
+          fromClass,
+          fromHour,
+          remainingFromUnits
+        );
+
+        setCellUnitIds(
+          newSchedule,
+          selectedDay,
+          toClass,
+          toHour,
+          [...targetUnits, unitId]
+        );
       }
 
-      const targetUnitId = newSchedule[selectedDay]?.[toClass]?.[toHour];
+      return newSchedule;
+    });
 
-      if (ctrlPressed && targetUnitId) {
-        newSchedule[selectedDay][fromClass][fromHour] = targetUnitId;
-        newSchedule[selectedDay][toClass][toHour] = unitId;
+    setSelectedCell({
+      className: toClass,
+      hour: String(toHour),
+    });
+  }
+
+  function moveUnitsWithinRow(fromClass, fromHour, toClass, toHour, unitIds) {
+    if (fromClass !== toClass) {
+      alert("אפשר לגרור רק בתוך אותה שורה / אותה כיתה");
+      return;
+    }
+
+    if (fromHour === toHour) return;
+
+    updateScheduleWithHistory((prev) => {
+      const newSchedule = structuredClone(prev);
+
+      const fromUnits = getCellUnitIdsFromSchedule(
+        newSchedule,
+        selectedDay,
+        fromClass,
+        fromHour
+      );
+
+      const targetUnits = getCellUnitIdsFromSchedule(
+        newSchedule,
+        selectedDay,
+        toClass,
+        toHour
+      );
+
+      if (ctrlPressed && targetUnits.length > 0) {
+        setCellUnitIds(
+          newSchedule,
+          selectedDay,
+          fromClass,
+          fromHour,
+          targetUnits
+        );
+
+        setCellUnitIds(
+          newSchedule,
+          selectedDay,
+          toClass,
+          toHour,
+          fromUnits
+        );
       } else {
-        delete newSchedule[selectedDay][fromClass][fromHour];
-        newSchedule[selectedDay][toClass][toHour] = unitId;
+        setCellUnitIds(newSchedule, selectedDay, fromClass, fromHour, []);
+        setCellUnitIds(newSchedule, selectedDay, toClass, toHour, fromUnits);
       }
 
       return newSchedule;
@@ -399,13 +532,24 @@ export default function App() {
     const [toClass, toHour] = over.id.split("-");
 
     if (data?.source === "cell") {
-      moveUnitWithinRow(
-        data.fromClass,
-        data.fromHour,
-        toClass,
-        toHour,
-        data.unitId
-      );
+      if (shiftPressed && singleDragUnitId) {
+        moveSingleUnitWithinRow(
+          data.fromClass,
+          data.fromHour,
+          toClass,
+          toHour,
+          singleDragUnitId
+        );
+      } else {
+        moveUnitsWithinRow(
+          data.fromClass,
+          data.fromHour,
+          toClass,
+          toHour,
+          data.unitIds || []
+        );
+      }
+
       return;
     }
 
@@ -431,7 +575,7 @@ export default function App() {
         return;
       }
 
-      placeUnitInCell(toClass, toHour, unit.id);
+      placeUnitInCell(toClass, toHour, unit.id, shiftPressed);
     }
   }
 
@@ -469,6 +613,19 @@ export default function App() {
 
   return (
     <DndContext
+      onDragStart={(event) => {
+        if (!shiftPressed) {
+          setSingleDragUnitId(null);
+          return;
+        }
+
+        const target = event.activatorEvent?.target;
+        const unitElement = target?.closest?.("[data-unit-id]");
+        const unitId = unitElement?.dataset?.unitId;
+
+        setSingleDragUnitId(unitId || null);
+      }}
+
       onDragOver={(event) => {
         const overId = event.over?.id;
 
@@ -484,11 +641,17 @@ export default function App() {
           hour: String(hour),
         });
       }}
+
       onDragEnd={(event) => {
         setHoveredCell(null);
         handleDragEnd(event);
+        setSingleDragUnitId(null);
       }}
-      onDragCancel={() => setHoveredCell(null)}
+
+      onDragCancel={() => {
+        setHoveredCell(null);
+        setSingleDragUnitId(null);
+      }}
     >
       <div className="container">
         <h1>מערכת שעות - אב טיפוס</h1>
@@ -657,36 +820,44 @@ export default function App() {
                   </td>
 
                   {hours.map((hour) => {
-                    const unitId = schedule[selectedDay]?.[className]?.[hour];
-                    const unit = getUnitById(unitId);
-                    const teacher = unit ? getTeacherById(unit.teacherId) : null;
-                    const teacherId = unit?.teacherId;
+                    const unitIds = getCellUnitIds(selectedDay, className, hour);
+                    const units = unitIds.map(getUnitById).filter(Boolean);
 
-                    const conflict =
-                      teacherId && hasConflict(className, hour, teacherId);
+                    const teachersByUnit = {};
+                    const groupsByUnit = {};
+
+                    for (const unit of units) {
+                      teachersByUnit[unit.id] = getTeacherById(unit.teacherId);
+                      groupsByUnit[unit.id] = getConstraintGroupById(unit.constraintGroupId);
+                    }
+
+                    const conflictingTeacherIds = units
+                      .filter((unit) =>
+                        hasTeacherConflict(className, hour, unit.teacherId)
+                      )
+                      .map((unit) => unit.teacherId);
+
 
                     const selected =
                       selectedCell?.className === className &&
                       selectedCell?.hour === String(hour);
-                    const group = unit ? getConstraintGroupById(unit.constraintGroupId) : null;
+
+                    const highlighted =
+                      hoveredCell?.className === className &&
+                      hoveredCell?.hour === String(hour);
+
                     return (
                       <DroppableCell
                         key={hour}
                         className={className}
                         hour={hour}
-                        teacher={teacher}
-                        teacherId={teacherId}
-                        conflict={conflict}
+                        units={units}
+                        teachersByUnit={teachersByUnit}
+                        groupsByUnit={groupsByUnit}
+                        conflictingTeacherIds={conflictingTeacherIds}
                         selected={selected}
+                        highlighted={highlighted}
                         displayMode={displayMode}
-                        unit={unit}
-                        teacher={teacher}
-                        teacherId={teacherId}
-                        group={group}
-                        highlighted={
-                          hoveredCell?.className === className &&
-                          hoveredCell?.hour === String(hour)
-                        }
                         onClick={() =>
                           setSelectedCell({
                             className,
