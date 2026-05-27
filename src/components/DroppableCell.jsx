@@ -11,6 +11,7 @@ export default function DroppableCell({
   displayMode,
   onClick,
   unit,
+  group,
 }) {
   const cellId = `${className}-${hour}`;
 
@@ -40,6 +41,13 @@ export default function DroppableCell({
       : undefined,
   };
 
+  const teacherStyle = {
+    transform: transform
+      ? `translate(${transform.x}px, ${transform.y}px)`
+      : undefined,
+    backgroundColor: group?.color || undefined,
+  };
+
   return (
     <td
       ref={setDroppableRef}
@@ -53,7 +61,7 @@ export default function DroppableCell({
       {teacher ? (
         <div
           ref={setDraggableRef}
-          style={style}
+          style={teacherStyle}
           {...listeners}
           {...attributes}
           className="cell-teacher"
@@ -61,7 +69,9 @@ export default function DroppableCell({
           {displayMode === "names"
             ? unit?.subject && unit.subject !== "רגיל"
               ? `${teacher.name} / ${unit.subject}`
-              : teacher.name
+              : group
+                ? `${teacher.name} [${group.name}]`
+                : teacher.name
             : teacherId}
         </div>
       ) : null}

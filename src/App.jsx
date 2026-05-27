@@ -50,7 +50,7 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
   const [importedExcel, setImportedExcel] = useState(null);
-
+  const [groupDialogUnit, setGroupDialogUnit] = useState(null);
   const [schoolData, setSchoolData] = useState(() => {
     const defaultData = {
       teachers: mockTeachers,
@@ -128,6 +128,22 @@ export default function App() {
     setSchedule(nextSchedule);
     setHistory(newHistory);
     setFuture(newFuture);
+  }
+
+  function assignUnitToGroup(unitId, groupId) {
+    setSchoolData((prev) => ({
+      ...prev,
+      teachingUnits: prev.teachingUnits.map((unit) =>
+        unit.id === unitId
+          ? {
+            ...unit,
+            constraintGroupId: groupId || null,
+          }
+          : unit
+      ),
+    }));
+
+    setGroupDialogUnit(null);
   }
 
   function updateScheduleWithHistory(updater) {
@@ -221,6 +237,10 @@ export default function App() {
       window.removeEventListener("keyup", handleKeyUp);
     };
   }, [selectedCell, schedule, selectedDay]);
+
+  function getConstraintGroupById(groupId) {
+    return constraintGroups.find((group) => group.id === groupId);
+  }
 
   function countScheduledUnitHours(unitId) {
     let count = 0;
@@ -555,7 +575,7 @@ export default function App() {
         </div>
 
         <ConstraintGroupsPanel constraintGroups={constraintGroups} />
-        
+
         <div
           className="table-scroll-wrapper"
           ref={tableScrollRef}
@@ -591,7 +611,7 @@ export default function App() {
                         const isFreeDay = isTeacherFreeDay(unit.teacherId, selectedDay);
 
                         if (!showFreeDayTeachers && isFreeDay) return null;
-
+                        const group = getConstraintGroupById(unit.constraintGroupId);
                         return (
                           <LoadItem
                             key={unit.id}
@@ -601,6 +621,8 @@ export default function App() {
                             placements={getUnitPlacements(unit.id)}
                             displayMode={displayMode}
                             isFreeDay={isFreeDay}
+                            group={group}
+                            onAssignGroup={setGroupDialogUnit}
                           />
                         );
                       })
@@ -629,7 +651,7 @@ export default function App() {
                     const selected =
                       selectedCell?.className === className &&
                       selectedCell?.hour === String(hour);
-
+                    const group = unit ? getConstraintGroupById(unit.constraintGroupId) : null;
                     return (
                       <DroppableCell
                         key={hour}
@@ -643,6 +665,7 @@ export default function App() {
                         unit={unit}
                         teacher={teacher}
                         teacherId={teacherId}
+                        group={group}
                         highlighted={
                           hoveredCell?.className === className &&
                           hoveredCell?.hour === String(hour)
@@ -654,12 +677,52 @@ export default function App() {
                           })
                         }
                       />
+
                     );
                   })}
                 </tr>
               ))}
             </tbody>
           </table>
+          {groupDialogUnit && (
+            <div className="modal-backdrop" onClick={() => setGroupDialogUnit(null)}>
+              <div className="group-dialog" onClick={(e) => e.stopPropagation()}>
+                <h3>שיוך לקבוצת שיבוץ</h3>
+
+                <p>
+                  יחידה:{" "}
+                  <strong>
+                    {getTeacherById(groupDialogUnit.teacherId)?.name}
+                    {groupDialogUnit.subject && groupDialogUnit.subject !== "רגיל"
+                      ? ` / ${groupDialogUnit.subject}`
+                      : ""}
+                  </strong>
+                </p>
+
+                <button
+                  className="group-option no-group"
+                  onClick={() => assignUnitToGroup(groupDialogUnit.id, null)}
+                >
+                  ללא קבוצה
+                </button>
+
+                {constraintGroups.map((group) => (
+                  <button
+                    key={group.id}
+                    className="group-option"
+                    onClick={() => assignUnitToGroup(groupDialogUnit.id, group.id)}
+                  >
+                    <span
+                      className="constraint-color"
+                      style={{ backgroundColor: group.color }}
+                    />
+                    {group.name} —{" "}
+                    {group.type === "sameTime" ? "חייב ביחד" : "אסור ביחד"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <p className="hint">

@@ -7,6 +7,8 @@ export default function LoadItem({
   placements,
   displayMode,
   isFreeDay,
+  group,
+  onAssignGroup,
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: `load-${unit.id}`,
@@ -22,8 +24,7 @@ export default function LoadItem({
     transform: transform
       ? `translate(${transform.x}px, ${transform.y}px)`
       : undefined,
-    backgroundColor:
-      displayMode === "codes" && unit.color ? unit.color : undefined,
+    backgroundColor: group?.color || undefined,
   };
 
   const label =
@@ -39,6 +40,10 @@ export default function LoadItem({
       style={style}
       {...listeners}
       {...attributes}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onAssignGroup(unit);
+      }}
       className={[
         "load-item",
         remaining <= 0 ? "load-item-empty" : "",
@@ -47,7 +52,9 @@ export default function LoadItem({
     >
       <span className="load-teacher-code">{label}</span>
       <span className="load-count"> × {remaining}</span>
-
+      {displayMode === "names" && group && (
+        <span className="unit-group-label"> [{group.name}]</span>
+      )}
       {placements.length > 0 && (
         <span className="load-placements"> ({placements.join(", ")})</span>
       )}
