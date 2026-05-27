@@ -385,6 +385,61 @@ export default function App() {
 
     return Array.isArray(value) ? value : [value];
   }
+
+  function isSameTimeGroup(unit) {
+    const group = getConstraintGroupById(unit.constraintGroupId);
+    return group?.type === "sameTime";
+  }
+
+  function getSameTimeGroupUnits(unit) {
+    if (!unit?.constraintGroupId) return [unit];
+
+    const group = getConstraintGroupById(unit.constraintGroupId);
+
+    if (group?.type !== "sameTime") return [unit];
+
+    return teachingUnits.filter(
+      (candidate) => candidate.constraintGroupId === unit.constraintGroupId
+    );
+  }
+
+  function canPlaceUnitOnSelectedDay(unit) {
+    if (isTeacherFreeDay(unit.teacherId, selectedDay)) {
+      return false;
+    }
+
+    return getRemainingUnitHours(unit.id) > 0;
+  }
+
+  function placeUnitsByClassAtHour(unitsToPlace, hour, append = false) {
+    updateScheduleWithHistory((prev) => {
+      const newSchedule = structuredClone(prev);
+
+      for (const unit of unitsToPlace) {
+        const currentUnits = getCellUnitIdsFromSchedule(
+          newSchedule,
+          selectedDay,
+          unit.className,
+          hour
+        );
+
+        const nextUnits = append
+          ? [...currentUnits, unit.id]
+          : [unit.id];
+
+        setCellUnitIds(
+          newSchedule,
+          selectedDay,
+          unit.className,
+          hour,
+          nextUnits
+        );
+      }
+
+      return newSchedule;
+    });
+  }
+
   function moveSingleUnitWithinRow(fromClass, fromHour, toClass, toHour, unitId) {
     if (fromClass !== toClass) {
       alert("אפשר לגרור רק בתוך אותה שורה / אותה כיתה");
@@ -563,19 +618,26 @@ export default function App() {
         return;
       }
 
-      if (isTeacherFreeDay(unit.teacherId, selectedDay)) {
-        alert("לא ניתן לשבץ מורה ביום החופשי שלו");
+      const unitsToPlace = getSameTimeGroupUnits(unit);
+
+      const invalidUnits = unitsToPlace.filter(
+        (candidate) => !canPlaceUnitOnSelectedDay(candidate)
+      );
+
+      if (invalidUnits.length > 0) {
+        const names = invalidUnits
+          .map((candidate) => {
+            const teacher = getTeacherById(candidate.teacherId);
+            return `${teacher?.name || candidate.teacherId} (${candidate.className})`;
+          })
+          .join(", ");
+
+        alert(`לא ניתן לשבץ את כל הקבוצה. יש בעיה עם: ${names}`);
         return;
       }
 
-      const remaining = getRemainingUnitHours(unit.id);
-
-      if (remaining <= 0) {
-        alert("אין שעות שנותרו לשיבוץ עבור יחידה זו");
-        return;
-      }
-
-      placeUnitInCell(toClass, toHour, unit.id, shiftPressed);
+      placeUnitsByClassAtHour(unitsToPlace, toHour, shiftPressed);
+      return;
     }
   }
 
