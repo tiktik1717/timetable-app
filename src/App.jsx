@@ -549,6 +549,23 @@ export default function App() {
                 setFuture([]);
                 localStorage.removeItem("schoolSchedule");
               }
+              setSchoolData((prev) => {
+                const cleanedSchoolData = {
+                  ...prev,
+                  teachingUnits: prev.teachingUnits.map((unit) => ({
+                    ...unit,
+                    constraintGroupId: null,
+                    color: null,
+                  })),
+                };
+
+                localStorage.setItem(
+                  "schoolData",
+                  JSON.stringify(cleanedSchoolData)
+                );
+
+                return cleanedSchoolData;
+              });
             }}
           >
             נקה מערכת

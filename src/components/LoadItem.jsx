@@ -52,9 +52,7 @@ export default function LoadItem({
     >
       <span className="load-teacher-code">{label}</span>
       <span className="load-count"> × {remaining}</span>
-      {displayMode === "names" && group && (
-        <span className="unit-group-label"> [{group.name}]</span>
-      )}
+
       {placements.length > 0 && (
         <span className="load-placements"> ({placements.join(", ")})</span>
       )}

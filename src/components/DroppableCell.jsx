@@ -69,9 +69,7 @@ export default function DroppableCell({
           {displayMode === "names"
             ? unit?.subject && unit.subject !== "רגיל"
               ? `${teacher.name} / ${unit.subject}`
-              : group
-                ? `${teacher.name} [${group.name}]`
-                : teacher.name
+              : teacher.name
             : teacherId}
         </div>
       ) : null}
