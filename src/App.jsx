@@ -344,19 +344,31 @@ export default function App() {
   }
 
   function removeTeacherFromCell(className, hour) {
+    const unitIds = getCellUnitIds(selectedDay, className, hour);
+    const units = unitIds.map(getUnitById).filter(Boolean);
+
+    const sameTimeUnit = units.find((unit) => isSameTimeGroup(unit));
+
+    if (sameTimeUnit) {
+      removeSameTimeGroupAt(
+        selectedDay,
+        hour,
+        sameTimeUnit.constraintGroupId
+      );
+      return;
+    }
+
     updateScheduleWithHistory((prev) => {
       const newSchedule = structuredClone(prev);
 
-      if (newSchedule[selectedDay]?.[className]) {
-        delete newSchedule[selectedDay][className][hour];
-      }
+      setCellUnitIds(newSchedule, selectedDay, className, hour, []);
 
       return newSchedule;
     });
 
     setSelectedCell(null);
   }
-
+  
   function placeUnitInCell(className, hour, unitId, append = false) {
     updateScheduleWithHistory((prev) => {
       const newSchedule = structuredClone(prev);
@@ -375,6 +387,82 @@ export default function App() {
       setCellUnitIds(newSchedule, selectedDay, className, hour, nextUnits);
 
       return newSchedule;
+    });
+  }
+  function getScheduledSameTimeGroupUnitsAt(day, hour, groupId) {
+    const result = [];
+
+    for (const className of classes) {
+      const unitIds = getCellUnitIds(day, className, hour);
+
+      for (const unitId of unitIds) {
+        const unit = getUnitById(unitId);
+
+        if (unit?.constraintGroupId === groupId) {
+          result.push(unit);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  function moveSameTimeGroup(fromHour, toHour, groupId, append = false) {
+    if (fromHour === toHour) return;
+
+    const groupUnits = getScheduledSameTimeGroupUnitsAt(
+      selectedDay,
+      fromHour,
+      groupId
+    );
+
+    if (groupUnits.length === 0) return;
+
+    updateScheduleWithHistory((prev) => {
+      const newSchedule = structuredClone(prev);
+
+      for (const unit of groupUnits) {
+        const fromUnits = getCellUnitIdsFromSchedule(
+          newSchedule,
+          selectedDay,
+          unit.className,
+          fromHour
+        );
+
+        const toUnits = getCellUnitIdsFromSchedule(
+          newSchedule,
+          selectedDay,
+          unit.className,
+          toHour
+        );
+
+        const cleanedFromUnits = fromUnits.filter((id) => id !== unit.id);
+
+        setCellUnitIds(
+          newSchedule,
+          selectedDay,
+          unit.className,
+          fromHour,
+          cleanedFromUnits
+        );
+
+        const nextToUnits = append ? [...toUnits, unit.id] : [unit.id];
+
+        setCellUnitIds(
+          newSchedule,
+          selectedDay,
+          unit.className,
+          toHour,
+          nextToUnits
+        );
+      }
+
+      return newSchedule;
+    });
+
+    setSelectedCell({
+      className: groupUnits[0].className,
+      hour: String(toHour),
     });
   }
 
@@ -438,6 +526,39 @@ export default function App() {
 
       return newSchedule;
     });
+  }
+
+  function removeSameTimeGroupAt(day, hour, groupId) {
+    const groupUnits = getScheduledSameTimeGroupUnitsAt(day, hour, groupId);
+
+    if (groupUnits.length === 0) return;
+
+    updateScheduleWithHistory((prev) => {
+      const newSchedule = structuredClone(prev);
+
+      for (const unit of groupUnits) {
+        const currentUnits = getCellUnitIdsFromSchedule(
+          newSchedule,
+          day,
+          unit.className,
+          hour
+        );
+
+        const nextUnits = currentUnits.filter((id) => id !== unit.id);
+
+        setCellUnitIds(
+          newSchedule,
+          day,
+          unit.className,
+          hour,
+          nextUnits
+        );
+      }
+
+      return newSchedule;
+    });
+
+    setSelectedCell(null);
   }
 
   function moveSingleUnitWithinRow(fromClass, fromHour, toClass, toHour, unitId) {
@@ -587,6 +708,25 @@ export default function App() {
     const [toClass, toHour] = over.id.split("-");
 
     if (data?.source === "cell") {
+      const draggedUnitIds = singleDragUnitId
+        ? [singleDragUnitId]
+        : data.unitIds || [];
+
+      const sameTimeUnit = draggedUnitIds
+        .map(getUnitById)
+        .find((unit) => unit && isSameTimeGroup(unit));
+
+      if (sameTimeUnit) {
+        moveSameTimeGroup(
+          data.fromHour,
+          toHour,
+          sameTimeUnit.constraintGroupId,
+          shiftPressed
+        );
+
+        return;
+      }
+
       if (shiftPressed && singleDragUnitId) {
         moveSingleUnitWithinRow(
           data.fromClass,
