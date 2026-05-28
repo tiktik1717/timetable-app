@@ -76,6 +76,7 @@ export default function App() {
       teachingLoads: mockTeachingLoads,
       teachingUnits: mockTeachingUnits,
       constraintGroups: mockConstraintGroups,
+      homeroomTeacherColor: "#c8e6c9",
     };
 
     const savedSchoolData =
@@ -266,6 +267,29 @@ export default function App() {
     }
 
     return warnings;
+  }
+
+  function isHomeroomTeacherForClass(unit) {
+    const teacher = getTeacherById(unit.teacherId);
+
+    return teacher?.educationClass === unit.className;
+  }
+
+  function getUnitDisplayGroup(unit) {
+    const group = getConstraintGroupById(unit.constraintGroupId);
+    //const group = getUnitDisplayGroup(unit);
+    if (group) return group;
+
+    if (isHomeroomTeacherForClass(unit)) {
+      return {
+        id: "homeroom-teacher",
+        name: "מחנך/ת כיתה",
+        color: schoolData.homeroomTeacherColor || "#c8e6c9",
+        rules: [],
+      };
+    }
+
+    return null;
   }
 
   function saveConstraintGroup(groupToSave) {
@@ -1385,6 +1409,7 @@ export default function App() {
 
             <ConstraintGroupsPanel
               constraintGroups={constraintGroups}
+              homeroomTeacherColor={schoolData.homeroomTeacherColor || "#c8e6c9"}
               onCreateGroup={() => {
                 setEditingConstraintGroup(null);
                 setShowConstraintGroupDialog(true);
@@ -1396,6 +1421,7 @@ export default function App() {
               onDeleteGroup={deleteConstraintGroup}
               onHighlightGroup={setHighlightedGroupId}
             />
+
             <WarningsPanel warnings={warnings} />
 
             <div
@@ -1433,7 +1459,8 @@ export default function App() {
                             const isFreeDay = isTeacherFreeDay(unit.teacherId, selectedDay);
 
                             if (!showFreeDayTeachers && isFreeDay) return null;
-                            const group = getConstraintGroupById(unit.constraintGroupId);
+                            //const group = getConstraintGroupById(unit.constraintGroupId);
+                            const group = getUnitDisplayGroup(unit);
                             return (
                               <LoadItem
                                 key={unit.id}
@@ -1478,7 +1505,7 @@ export default function App() {
 
                         for (const unit of units) {
                           teachersByUnit[unit.id] = getTeacherById(unit.teacherId);
-                          groupsByUnit[unit.id] = getConstraintGroupById(unit.constraintGroupId);
+                          groupsByUnit[unit.id] = getUnitDisplayGroup(unit);
                         }
 
                         const conflictingTeacherIds = units
@@ -1585,10 +1612,11 @@ export default function App() {
           <ClassesManager
             classes={classes}
             teachers={teachers}
+            homeroomTeacherColor={schoolData.homeroomTeacherColor || "#c8e6c9"}
             setSchoolData={setSchoolData}
           />
         )}
-        
+
         {groupDialogUnit && (
           <div className="modal-backdrop" onClick={() => setGroupDialogUnit(null)}>
             <div className="group-dialog" onClick={(e) => e.stopPropagation()}>

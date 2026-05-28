@@ -2,6 +2,7 @@ export default function ClassesManager({
     classes,
     teachers,
     setSchoolData,
+    homeroomTeacherColor,
 }) {
     const sortedClasses = [...classes].sort((a, b) =>
         a.localeCompare(b, "he")
@@ -127,6 +128,20 @@ export default function ClassesManager({
                     הוסף כיתה
                 </button>
             </div>
+
+            <label className="homeroom-color-picker">
+                צבע מחנך/ת:
+                <input
+                    type="color"
+                    value={homeroomTeacherColor || "#c8e6c9"}
+                    onChange={(e) =>
+                        setSchoolData((prev) => ({
+                            ...prev,
+                            homeroomTeacherColor: e.target.value,
+                        }))
+                    }
+                />
+            </label>
 
             <table className="manager-table">
                 <thead>
