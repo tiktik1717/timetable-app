@@ -25,6 +25,7 @@ import WarningsPanel from "./components/WarningsPanel";
 import ConstraintGroupDialog from "./components/ConstraintGroupDialog";
 import ShahafView from "./components/ShahafView";
 import TeacherView from "./components/TeacherView";
+import TeachersManager from "./components/TeachersManager";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -1267,6 +1268,12 @@ export default function App() {
           >
             תצוגת מורה
           </button>
+          <button
+            className={activeView === "teachers" ? "active-tab" : ""}
+            onClick={() => setActiveView("teachers")}
+          >
+            ניהול מורים
+          </button>
         </div>
 
         {activeView === "scheduler" && (
@@ -1557,6 +1564,13 @@ export default function App() {
             setSelectedTeacherForView={setSelectedTeacherForView}
             getCellUnitIds={getCellUnitIds}
             getUnitById={getUnitById}
+          />
+        )}
+
+        {activeView === "teachers" && (
+          <TeachersManager
+            teachers={teachers}
+            setSchoolData={setSchoolData}
           />
         )}
         
