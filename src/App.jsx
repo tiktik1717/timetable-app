@@ -491,8 +491,10 @@ export default function App() {
     for (const day of days) {
       for (const className of classes) {
         for (const hour of hours) {
-          if (schedule[day]?.[className]?.[hour] === unitId) {
-            placements.push(`${day}:${hour}`);
+          const unitIds = getCellUnitIds(day, className, hour);
+
+          if (unitIds.includes(unitId)) {
+            placements.push(`${day}-${hour}`);
           }
         }
       }

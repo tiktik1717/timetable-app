@@ -57,6 +57,7 @@ export default function LoadItem({
         style={style}
         {...listeners}
         {...attributes}
+        onMouseDown={() => setShowTooltip(false)}
         onClick={() => {
           setShowTooltip(false);
           if (unit.constraintGroupId) {
@@ -78,7 +79,7 @@ export default function LoadItem({
         <span className="load-teacher-code">{label}</span>
         <span className="load-count">
           {" "}
-          ({unit.hours}/{remaining})
+          ({remaining}/{unit.hours})
         </span>
       </div>
 
