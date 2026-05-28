@@ -21,6 +21,8 @@ import {
   constraintGroups as mockConstraintGroups,
 } from "./data/mockData";
 
+import WarningsPanel from "./components/WarningsPanel";
+
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
 
@@ -198,6 +200,56 @@ export default function App() {
     setGroupDialogUnit(null);
     setGroupDialogHours("");
     setGroupDialogSubject("");
+  }
+
+  function getWarnings() {
+    const warnings = [];
+
+    for (const day of days) {
+      for (const className of classes) {
+        for (const hour of hours) {
+          const unitIds = getCellUnitIds(day, className, hour);
+          const units = unitIds.map(getUnitById).filter(Boolean);
+
+          for (const unit of units) {
+            if (hasTeacherConflict(className, hour, unit.teacherId)) {
+              warnings.push({
+                type: "teacherConflict",
+                day,
+                className,
+                hour,
+                unitId: unit.id,
+                teacherId: unit.teacherId,
+              });
+            }
+
+            if (hasNotSameTimeConflict(className, hour, unit)) {
+              warnings.push({
+                type: "notSameTime",
+                day,
+                className,
+                hour,
+                unitId: unit.id,
+                groupId: unit.constraintGroupId,
+              });
+            }
+
+            if (hasNotSameDaySameClassConflict(className, hour, unit)) {
+              warnings.push({
+                type: "notSameDaySameClass",
+                day,
+                className,
+                hour,
+                unitId: unit.id,
+                groupId: unit.constraintGroupId,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return warnings;
   }
 
   function updateScheduleWithHistory(updater) {
@@ -1075,6 +1127,9 @@ export default function App() {
     }
   }
 
+  const warnings = getWarnings();
+
+
   return (
     <DndContext
       onDragStart={(event) => {
@@ -1228,7 +1283,7 @@ export default function App() {
         </div>
 
         <ConstraintGroupsPanel constraintGroups={constraintGroups} />
-
+        <WarningsPanel warnings={warnings} />
         <div
           className="table-scroll-wrapper"
           ref={tableScrollRef}

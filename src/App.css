@@ -447,3 +447,22 @@ th {
   border-radius: 6px;
   cursor: pointer;
 }
+
+.warnings-panel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fff8e1;
+  border: 1px solid #f9a825;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.no-warnings {
+  color: #2e7d32;
+  font-weight: bold;
+}
