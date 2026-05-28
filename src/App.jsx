@@ -3,6 +3,7 @@ import { DndContext } from "@dnd-kit/core";
 import {
   readExcelFile,
   buildDataFromTimetableSheet,
+  buildDataFromRawSadin,
 } from "./services/excelImport";
 
 import "./App.css";
@@ -28,6 +29,7 @@ import TeacherView from "./components/TeacherView";
 import TeachersManager from "./components/TeachersManager";
 import ClassesManager from "./components/ClassesManager";
 import MeetingsManager from "./components/MeetingsManager";
+
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -1263,7 +1265,24 @@ export default function App() {
 
     try {
       const result = await readExcelFile(file);
-      const parsedData = buildDataFromTimetableSheet(result);
+      let parsedData;
+
+      try {
+        parsedData = buildDataFromRawSadin(result);
+      } catch (rawError) {
+        console.error("Raw sadin import failed:", rawError);
+        console.log("Available sheets:", result.sheetNames);
+
+        try {
+          parsedData = buildDataFromTimetableSheet(result);
+        } catch (processedError) {
+          console.error("Processed timetable import failed:", processedError);
+          throw new Error(
+            `ייבוא הסדין נכשל. הגליונות שנמצאו בקובץ הם: ${result.sheetNames.join(", ")}`
+          );
+        }
+      }
+      //const parsedData = buildDataFromTimetableSheet(result);
 
       console.log("Excel imported:", result);
       console.log("Parsed school data:", parsedData);
