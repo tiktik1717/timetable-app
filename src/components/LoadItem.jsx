@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { getReadableTextColor } from "../utils/colorUtils";
 
@@ -9,10 +10,12 @@ export default function LoadItem({
   displayMode,
   isFreeDay,
   group,
+  highlightedGroup,
   onAssignGroup,
   onHighlightGroup,
-  highlightedGroup,
 }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: `load-${unit.id}`,
     data: {
@@ -40,33 +43,49 @@ export default function LoadItem({
         : teacher?.name
       : unit.teacherId;
 
+  const tooltipText =
+    placements.length > 0 ? placements.join(", ") : "אין שיבוצים עדיין";
+
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        onAssignGroup(unit);
-      }}
-      onClick={() => {
-        if (unit.constraintGroupId) {
-          onHighlightGroup(unit.constraintGroupId);
-        }
-      }}
-      className={[
-        "load-item",
-        remaining <= 0 ? "load-item-empty" : "",
-        isFreeDay ? "load-item-free-day" : "",
-        highlightedGroup ? "group-highlight" : "",
-      ].join(" ")}
+      className="load-item-wrapper"
+      onMouseEnter={() => setShowTooltip(true)}
+      onMouseLeave={() => setShowTooltip(false)}
     >
-      <span className="load-teacher-code">{label}</span>
-      <span className="load-count"> × {remaining}</span>
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...listeners}
+        {...attributes}
+        onClick={() => {
+          setShowTooltip(false);
+          if (unit.constraintGroupId) {
+            onHighlightGroup(unit.constraintGroupId);
+          }
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setShowTooltip(false);
+          onAssignGroup(unit);
+        }}
+        className={[
+          "load-item",
+          remaining <= 0 ? "load-item-empty" : "",
+          isFreeDay ? "load-item-free-day" : "",
+          highlightedGroup ? "group-highlight" : "",
+        ].join(" ")}
+      >
+        <span className="load-teacher-code">{label}</span>
+        <span className="load-count">
+          {" "}
+          ({unit.hours}/{remaining})
+        </span>
+      </div>
 
-      {placements.length > 0 && (
-        <span className="load-placements"> ({placements.join(", ")})</span>
+      {showTooltip && (
+        <div className="load-tooltip">
+          {tooltipText}
+        </div>
       )}
     </div>
   );
