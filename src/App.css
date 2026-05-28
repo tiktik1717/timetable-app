@@ -690,3 +690,26 @@ th {
   gap: 4px;
   white-space: nowrap;
 }
+
+.manager-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+.manager-header h3 {
+  margin: 0;
+}
+
+.classes-manager {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.manager-table select {
+  padding: 5px;
+  min-width: 180px;
+}
