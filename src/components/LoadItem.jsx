@@ -9,6 +9,8 @@ export default function LoadItem({
   isFreeDay,
   group,
   onAssignGroup,
+  onHighlightGroup,
+  highlightedGroup,
 }) {
   const { attributes, listeners, setNodeRef, transform } = useDraggable({
     id: `load-${unit.id}`,
@@ -44,10 +46,16 @@ export default function LoadItem({
         event.preventDefault();
         onAssignGroup(unit);
       }}
+      onClick={() => {
+        if (unit.constraintGroupId) {
+          onHighlightGroup(unit.constraintGroupId);
+        }
+      }}
       className={[
         "load-item",
         remaining <= 0 ? "load-item-empty" : "",
         isFreeDay ? "load-item-free-day" : "",
+        highlightedGroup ? "group-highlight" : "",
       ].join(" ")}
     >
       <span className="load-teacher-code">{label}</span>

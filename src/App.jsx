@@ -53,6 +53,7 @@ export default function App() {
   const [importedExcel, setImportedExcel] = useState(null);
   const [groupDialogUnit, setGroupDialogUnit] = useState(null);
   const [singleDragUnitId, setSingleDragUnitId] = useState(null);
+  const [highlightedGroupId, setHighlightedGroupId] = useState(null);
   const [schoolData, setSchoolData] = useState(() => {
     const defaultData = {
       teachers: mockTeachers,
@@ -247,6 +248,14 @@ export default function App() {
     return constraintGroups.find((group) => group.id === groupId);
   }
 
+  function getUnitGroupId(unitId) {
+    const unit = getUnitById(unitId);
+
+    if (!unit) return null;
+
+    return unit.constraintGroupId;
+  }
+
   function countScheduledUnitHours(unitId) {
     let count = 0;
 
@@ -368,7 +377,7 @@ export default function App() {
 
     setSelectedCell(null);
   }
-  
+
   function placeUnitInCell(className, hour, unitId, append = false) {
     updateScheduleWithHistory((prev) => {
       const newSchedule = structuredClone(prev);
@@ -379,6 +388,16 @@ export default function App() {
         className,
         hour
       );
+
+      const unit = getUnitById(unitId);
+
+      if (
+        append &&
+        unit &&
+        cellAlreadyHasTeacher(currentUnits, unit.teacherId)
+      ) {
+        return newSchedule;
+      }
 
       const nextUnits = append
         ? [...currentUnits, unitId]
@@ -407,7 +426,14 @@ export default function App() {
     return result;
   }
 
-  function moveSameTimeGroup(fromHour, toHour, groupId, append = false) {
+  function isHighlightedGroup(unit) {
+    return (
+      highlightedGroupId &&
+      unit?.constraintGroupId === highlightedGroupId
+    );
+  }
+
+  function moveSameTimeGroup(fromHour, toHour, groupId, append = false, swap = false) {
     if (fromHour === toHour) return;
 
     const groupUnits = getScheduledSameTimeGroupUnitsAt(
@@ -438,23 +464,32 @@ export default function App() {
 
         const cleanedFromUnits = fromUnits.filter((id) => id !== unit.id);
 
-        setCellUnitIds(
-          newSchedule,
-          selectedDay,
-          unit.className,
-          fromHour,
-          cleanedFromUnits
-        );
+        if (swap && toUnits.length > 0) {
+          setCellUnitIds(newSchedule, selectedDay, unit.className, fromHour, [
+            ...cleanedFromUnits,
+            ...toUnits,
+          ]);
 
-        const nextToUnits = append ? [...toUnits, unit.id] : [unit.id];
+          setCellUnitIds(newSchedule, selectedDay, unit.className, toHour, [
+            unit.id,
+          ]);
+        } else {
+          setCellUnitIds(
+            newSchedule,
+            selectedDay,
+            unit.className,
+            fromHour,
+            cleanedFromUnits
+          );
 
-        setCellUnitIds(
-          newSchedule,
-          selectedDay,
-          unit.className,
-          toHour,
-          nextToUnits
-        );
+          setCellUnitIds(
+            newSchedule,
+            selectedDay,
+            unit.className,
+            toHour,
+            append ? [...toUnits, unit.id] : [unit.id]
+          );
+        }
       }
 
       return newSchedule;
@@ -511,6 +546,13 @@ export default function App() {
           hour
         );
 
+        if (
+          append &&
+          cellAlreadyHasTeacher(currentUnits, unit.teacherId)
+        ) {
+          continue;
+        }
+
         const nextUnits = append
           ? [...currentUnits, unit.id]
           : [unit.id];
@@ -525,6 +567,13 @@ export default function App() {
       }
 
       return newSchedule;
+    });
+  }
+
+  function cellAlreadyHasTeacher(unitIds, teacherId) {
+    return unitIds.some((unitId) => {
+      const unit = getUnitById(unitId);
+      return unit?.teacherId === teacherId;
     });
   }
 
@@ -721,7 +770,8 @@ export default function App() {
           data.fromHour,
           toHour,
           sameTimeUnit.constraintGroupId,
-          shiftPressed
+          shiftPressed,
+          ctrlPressed
         );
 
         return;
@@ -816,6 +866,13 @@ export default function App() {
   return (
     <DndContext
       onDragStart={(event) => {
+        const draggedUnit =
+          getUnitById(event.active.data.current?.unitId);
+
+        setHighlightedGroupId(
+          draggedUnit?.constraintGroupId || null
+        );
+
         if (!shiftPressed) {
           setSingleDragUnitId(null);
           return;
@@ -848,11 +905,13 @@ export default function App() {
         setHoveredCell(null);
         handleDragEnd(event);
         setSingleDragUnitId(null);
+        setHighlightedGroupId(null);
       }}
 
       onDragCancel={() => {
         setHoveredCell(null);
         setSingleDragUnitId(null);
+        setHighlightedGroupId(null);
       }}
     >
       <div className="container">
@@ -1005,6 +1064,8 @@ export default function App() {
                             isFreeDay={isFreeDay}
                             group={group}
                             onAssignGroup={setGroupDialogUnit}
+                            onHighlightGroup={setHighlightedGroupId}
+                            highlightedGroup={isHighlightedGroup(unit)}
                           />
                         );
                       })
@@ -1039,7 +1100,6 @@ export default function App() {
                       )
                       .map((unit) => unit.teacherId);
 
-
                     const selected =
                       selectedCell?.className === className &&
                       selectedCell?.hour === String(hour);
@@ -1047,6 +1107,16 @@ export default function App() {
                     const highlighted =
                       hoveredCell?.className === className &&
                       hoveredCell?.hour === String(hour);
+
+                    const highlightedUnitIds = new Set(
+                      units
+                        .filter(
+                          (unit) =>
+                            highlightedGroupId &&
+                            unit.constraintGroupId === highlightedGroupId
+                        )
+                        .map((unit) => unit.id)
+                    );
 
                     return (
                       <DroppableCell
@@ -1057,17 +1127,21 @@ export default function App() {
                         teachersByUnit={teachersByUnit}
                         groupsByUnit={groupsByUnit}
                         conflictingTeacherIds={conflictingTeacherIds}
+                        highlightedUnitIds={highlightedUnitIds}
                         selected={selected}
                         highlighted={highlighted}
                         displayMode={displayMode}
-                        onClick={() =>
+                        onClick={() => {
                           setSelectedCell({
                             className,
                             hour: String(hour),
-                          })
-                        }
-                      />
+                          });
 
+                          const firstUnit = units[0];
+
+                          setHighlightedGroupId(firstUnit?.constraintGroupId || null);
+                        }}
+                      />
                     );
                   })}
                 </tr>

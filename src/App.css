@@ -418,3 +418,8 @@ th {
 .cell-teacher-conflict {
   font-weight: 800;
 }
+
+.group-highlight {
+  outline: 3px solid #2196f3;
+  outline-offset: 1px;
+}

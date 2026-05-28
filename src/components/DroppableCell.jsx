@@ -11,6 +11,7 @@ export default function DroppableCell({
   highlighted,
   displayMode,
   onClick,
+  highlightedUnitIds,
 }) {
   const cellId = `${className}-${hour}`;
 
@@ -65,6 +66,7 @@ export default function DroppableCell({
           {units.map((unit) => {
             const teacher = teachersByUnit[unit.id];
             const group = groupsByUnit[unit.id];
+            const isHighlighted = highlightedUnitIds?.has(unit.id);
             const isConflicting = conflictingTeacherIds.includes(
               unit.teacherId
             );
@@ -73,11 +75,11 @@ export default function DroppableCell({
               <div
                 key={unit.id}
                 data-unit-id={unit.id}
-                className={
-                  isConflicting
-                    ? "cell-teacher cell-teacher-conflict"
-                    : "cell-teacher"
-                }
+                className={[
+                  "cell-teacher",
+                  isConflicting ? "cell-teacher-conflict" : "",
+                  isHighlighted ? "group-highlight" : "",
+                ].join(" ")}
                 style={{
                   backgroundColor: group?.color || undefined,
                 }}
