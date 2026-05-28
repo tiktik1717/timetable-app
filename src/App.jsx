@@ -737,7 +737,13 @@ export default function App() {
     );
   }
 
-  function moveSameTimeGroup(fromHour, toHour, groupId, append = false, swap = false) {
+  function moveSameTimeGroup(
+    fromHour,
+    toHour,
+    groupId,
+    append = false,
+    swap = false
+  ) {
     if (fromHour === toHour) return;
 
     const groupUnits = getScheduledSameTimeGroupUnitsAt(
@@ -751,47 +757,72 @@ export default function App() {
     updateScheduleWithHistory((prev) => {
       const newSchedule = structuredClone(prev);
 
+      const unitsByClass = {};
+
       for (const unit of groupUnits) {
+        if (!unitsByClass[unit.className]) {
+          unitsByClass[unit.className] = [];
+        }
+
+        unitsByClass[unit.className].push(unit);
+      }
+
+      for (const [className, unitsForClass] of Object.entries(unitsByClass)) {
+        const unitIdsForClass = unitsForClass.map((unit) => unit.id);
+
         const fromUnits = getCellUnitIdsFromSchedule(
           newSchedule,
           selectedDay,
-          unit.className,
+          className,
           fromHour
         );
 
         const toUnits = getCellUnitIdsFromSchedule(
           newSchedule,
           selectedDay,
-          unit.className,
+          className,
           toHour
         );
 
-        const cleanedFromUnits = fromUnits.filter((id) => id !== unit.id);
+        const cleanedFromUnits = fromUnits.filter(
+          (id) => !unitIdsForClass.includes(id)
+        );
 
         if (swap && toUnits.length > 0) {
-          setCellUnitIds(newSchedule, selectedDay, unit.className, fromHour, [
-            ...cleanedFromUnits,
-            ...toUnits,
-          ]);
-
-          setCellUnitIds(newSchedule, selectedDay, unit.className, toHour, [
-            unit.id,
-          ]);
-        } else {
           setCellUnitIds(
             newSchedule,
             selectedDay,
-            unit.className,
+            className,
             fromHour,
-            cleanedFromUnits
+            [...cleanedFromUnits, ...toUnits]
           );
 
           setCellUnitIds(
             newSchedule,
             selectedDay,
-            unit.className,
+            className,
             toHour,
-            append ? [...toUnits, unit.id] : [unit.id]
+            unitIdsForClass
+          );
+        } else {
+          setCellUnitIds(
+            newSchedule,
+            selectedDay,
+            className,
+            fromHour,
+            cleanedFromUnits
+          );
+
+          const nextToUnits = append
+            ? [...toUnits, ...unitIdsForClass.filter((id) => !toUnits.includes(id))]
+            : unitIdsForClass;
+
+          setCellUnitIds(
+            newSchedule,
+            selectedDay,
+            className,
+            toHour,
+            nextToUnits
           );
         }
       }
@@ -842,31 +873,38 @@ export default function App() {
     updateScheduleWithHistory((prev) => {
       const newSchedule = structuredClone(prev);
 
+      const unitsByClass = {};
+
       for (const unit of unitsToPlace) {
+        if (!unitsByClass[unit.className]) {
+          unitsByClass[unit.className] = [];
+        }
+
+        unitsByClass[unit.className].push(unit);
+      }
+
+      for (const [className, unitsForClass] of Object.entries(unitsByClass)) {
         const currentUnits = getCellUnitIdsFromSchedule(
           newSchedule,
           selectedDay,
-          unit.className,
+          className,
           hour
         );
 
-        if (
-          append &&
-          cellAlreadyHasTeacher(currentUnits, unit.teacherId)
-        ) {
-          continue;
-        }
+        const baseUnits = append ? [...currentUnits] : [];
 
-        const nextUnits = append
-          ? [...currentUnits, unit.id]
-          : [unit.id];
+        for (const unit of unitsForClass) {
+          if (!cellAlreadyHasTeacher(baseUnits, unit.teacherId)) {
+            baseUnits.push(unit.id);
+          }
+        }
 
         setCellUnitIds(
           newSchedule,
           selectedDay,
-          unit.className,
+          className,
           hour,
-          nextUnits
+          baseUnits
         );
       }
 
@@ -1035,6 +1073,34 @@ export default function App() {
     });
   }
 
+  function isMeetingClass(className) {
+    return meetings.some((meeting) => meeting.name === className);
+  }
+
+  function getMeetingByClassName(className) {
+    return meetings.find((meeting) => meeting.name === className);
+  }
+
+  function getLegalMeetingDays(meeting) {
+    const allowedDays =
+      meeting.allowedDays?.length > 0 ? meeting.allowedDays : days;
+
+    return allowedDays.filter((day) =>
+      (meeting.teacherIds || []).every((teacherId) => {
+        const teacher = getTeacherById(teacherId);
+        return !teacher?.freeDays?.includes(day);
+      })
+    );
+  }
+
+  function shouldShowClassInSelectedDay(className) {
+    const meeting = getMeetingByClassName(className);
+
+    if (!meeting) return true;
+
+    return getLegalMeetingDays(meeting).includes(selectedDay);
+  }
+
   function moveUnitsWithinRow(fromClass, fromHour, toClass, toHour, unitIds) {
     if (fromClass !== toClass) {
       alert("אפשר לגרור רק בתוך אותה שורה / אותה כיתה");
@@ -1163,9 +1229,15 @@ export default function App() {
 
       const unitsToPlace = getSameTimeGroupUnits(unit);
 
-      const invalidUnits = unitsToPlace.filter(
-        (candidate) => !canPlaceUnitOnSelectedDay(candidate)
-      );
+      const invalidUnits = unitsToPlace.filter((candidate) => {
+        const alreadyInTarget = getCellUnitIds(
+          selectedDay,
+          candidate.className,
+          toHour
+        ).includes(candidate.id);
+
+        return !alreadyInTarget && !canPlaceUnitOnSelectedDay(candidate);
+      });
 
       if (invalidUnits.length > 0) {
         const names = invalidUnits
@@ -1457,122 +1529,124 @@ export default function App() {
                 </thead>
 
                 <tbody>
-                  {classes.map((className) => (
-                    <tr key={className}>
+                  {classes
+                    .filter((className) => shouldShowClassInSelectedDay(className))
+                    .map((className) => (
+                      <tr key={className}>
 
-                      <LoadCell className={className}>
-                        {teachingUnits
-                          .filter((unit) => unit.className === className)
-                          .map((unit) => {
-                            const teacher = getTeacherById(unit.teacherId);
-                            const remaining = getRemainingUnitHours(unit.id);
-                            const isFreeDay = isTeacherFreeDay(unit.teacherId, selectedDay);
+                        <LoadCell className={className}>
+                          {teachingUnits
+                            .filter((unit) => unit.className === className)
+                            .map((unit) => {
+                              const teacher = getTeacherById(unit.teacherId);
+                              const remaining = getRemainingUnitHours(unit.id);
+                              const isFreeDay = isTeacherFreeDay(unit.teacherId, selectedDay);
 
-                            if (!showFreeDayTeachers && isFreeDay) return null;
-                            //const group = getConstraintGroupById(unit.constraintGroupId);
-                            const group = getUnitDisplayGroup(unit);
-                            return (
-                              <LoadItem
-                                key={unit.id}
-                                unit={unit}
-                                teacher={teacher}
-                                remaining={remaining}
-                                placements={getUnitPlacements(unit.id)}
-                                displayMode={displayMode}
-                                isFreeDay={isFreeDay}
-                                group={group}
-                                onAssignGroup={(unit) => {
-                                  setGroupDialogUnit(unit);
-                                  setGroupDialogHours(String(unit.hours));
-                                  setGroupDialogSubject(
-                                    unit.subject && unit.subject !== "רגיל" ? unit.subject : ""
-                                  );
-                                }}
-                                onHighlightGroup={setHighlightedGroupId}
-                                highlightedGroup={isHighlightedGroup(unit)}
-                              />
-                            );
-                          })
-                        }
-                      </LoadCell>
+                              if (!showFreeDayTeachers && isFreeDay) return null;
+                              //const group = getConstraintGroupById(unit.constraintGroupId);
+                              const group = getUnitDisplayGroup(unit);
+                              return (
+                                <LoadItem
+                                  key={unit.id}
+                                  unit={unit}
+                                  teacher={teacher}
+                                  remaining={remaining}
+                                  placements={getUnitPlacements(unit.id)}
+                                  displayMode={displayMode}
+                                  isFreeDay={isFreeDay}
+                                  group={group}
+                                  onAssignGroup={(unit) => {
+                                    setGroupDialogUnit(unit);
+                                    setGroupDialogHours(String(unit.hours));
+                                    setGroupDialogSubject(
+                                      unit.subject && unit.subject !== "רגיל" ? unit.subject : ""
+                                    );
+                                  }}
+                                  onHighlightGroup={setHighlightedGroupId}
+                                  highlightedGroup={isHighlightedGroup(unit)}
+                                />
+                              );
+                            })
+                          }
+                        </LoadCell>
 
-                      <td
-                        className={
-                          hoveredCell?.className === className
-                            ? "class-name highlighted-header"
-                            : "class-name"
-                        }
-                      >
-                        {className}
-                      </td>
+                        <td
+                          className={
+                            hoveredCell?.className === className
+                              ? "class-name highlighted-header"
+                              : "class-name"
+                          }
+                        >
+                          {className}
+                        </td>
 
-                      {hours.map((hour) => {
-                        const unitIds = getCellUnitIds(selectedDay, className, hour);
-                        const units = unitIds.map(getUnitById).filter(Boolean);
+                        {hours.map((hour) => {
+                          const unitIds = getCellUnitIds(selectedDay, className, hour);
+                          const units = unitIds.map(getUnitById).filter(Boolean);
 
-                        const teachersByUnit = {};
-                        const groupsByUnit = {};
+                          const teachersByUnit = {};
+                          const groupsByUnit = {};
 
-                        for (const unit of units) {
-                          teachersByUnit[unit.id] = getTeacherById(unit.teacherId);
-                          groupsByUnit[unit.id] = getUnitDisplayGroup(unit);
-                        }
+                          for (const unit of units) {
+                            teachersByUnit[unit.id] = getTeacherById(unit.teacherId);
+                            groupsByUnit[unit.id] = getUnitDisplayGroup(unit);
+                          }
 
-                        const conflictingTeacherIds = units
-                          .filter(
-                            (unit) =>
-                              hasTeacherConflict(className, hour, unit.teacherId) ||
-                              hasNotSameDaySameClassConflict(className, hour, unit) ||
-                              hasNotSameTimeConflict(className, hour, unit)
-                          )
-                          .map((unit) => unit.teacherId);
-
-                        const selected =
-                          selectedCell?.className === className &&
-                          selectedCell?.hour === String(hour);
-
-                        const highlighted =
-                          hoveredCell?.className === className &&
-                          hoveredCell?.hour === String(hour);
-
-                        const highlightedUnitIds = new Set(
-                          units
+                          const conflictingTeacherIds = units
                             .filter(
                               (unit) =>
-                                highlightedGroupId &&
-                                unit.constraintGroupId === highlightedGroupId
+                                hasTeacherConflict(className, hour, unit.teacherId) ||
+                                hasNotSameDaySameClassConflict(className, hour, unit) ||
+                                hasNotSameTimeConflict(className, hour, unit)
                             )
-                            .map((unit) => unit.id)
-                        );
+                            .map((unit) => unit.teacherId);
 
-                        return (
-                          <DroppableCell
-                            key={hour}
-                            className={className}
-                            hour={hour}
-                            units={units}
-                            teachersByUnit={teachersByUnit}
-                            groupsByUnit={groupsByUnit}
-                            conflictingTeacherIds={conflictingTeacherIds}
-                            highlightedUnitIds={highlightedUnitIds}
-                            selected={selected}
-                            highlighted={highlighted}
-                            displayMode={displayMode}
-                            onClick={() => {
-                              setSelectedCell({
-                                className,
-                                hour: String(hour),
-                              });
+                          const selected =
+                            selectedCell?.className === className &&
+                            selectedCell?.hour === String(hour);
 
-                              const firstUnit = units[0];
+                          const highlighted =
+                            hoveredCell?.className === className &&
+                            hoveredCell?.hour === String(hour);
 
-                              setHighlightedGroupId(firstUnit?.constraintGroupId || null);
-                            }}
-                          />
-                        );
-                      })}
-                    </tr>
-                  ))}
+                          const highlightedUnitIds = new Set(
+                            units
+                              .filter(
+                                (unit) =>
+                                  highlightedGroupId &&
+                                  unit.constraintGroupId === highlightedGroupId
+                              )
+                              .map((unit) => unit.id)
+                          );
+
+                          return (
+                            <DroppableCell
+                              key={hour}
+                              className={className}
+                              hour={hour}
+                              units={units}
+                              teachersByUnit={teachersByUnit}
+                              groupsByUnit={groupsByUnit}
+                              conflictingTeacherIds={conflictingTeacherIds}
+                              highlightedUnitIds={highlightedUnitIds}
+                              selected={selected}
+                              highlighted={highlighted}
+                              displayMode={displayMode}
+                              onClick={() => {
+                                setSelectedCell({
+                                  className,
+                                  hour: String(hour),
+                                });
+
+                                const firstUnit = units[0];
+
+                                setHighlightedGroupId(firstUnit?.constraintGroupId || null);
+                              }}
+                            />
+                          );
+                        })}
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
