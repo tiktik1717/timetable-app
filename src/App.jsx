@@ -403,17 +403,35 @@ export default function App() {
   }
 
   function hasTeacherConflict(currentClass, hour, teacherId) {
+    const currentUnitIds = getCellUnitIds(selectedDay, currentClass, hour);
+    const currentUnits = currentUnitIds
+      .map(getUnitById)
+      .filter((unit) => unit?.teacherId === teacherId);
+
     for (const className of classes) {
       if (className === currentClass) continue;
 
       const otherUnitIds = getCellUnitIds(selectedDay, className, hour);
+      const otherUnits = otherUnitIds
+        .map(getUnitById)
+        .filter((unit) => unit?.teacherId === teacherId);
 
-      const hasSameTeacher = otherUnitIds.some((unitId) => {
-        const otherUnit = getUnitById(unitId);
-        return otherUnit?.teacherId === teacherId;
-      });
+      for (const currentUnit of currentUnits) {
+        for (const otherUnit of otherUnits) {
+          const sameGroup =
+            currentUnit.constraintGroupId &&
+            currentUnit.constraintGroupId === otherUnit.constraintGroupId;
 
-      if (hasSameTeacher) return true;
+          const group = getConstraintGroupById(currentUnit.constraintGroupId);
+
+          const allowedSameTimeGroup =
+            sameGroup && groupHasRule(group, "sameTime");
+
+          if (!allowedSameTimeGroup) {
+            return true;
+          }
+        }
+      }
     }
 
     return false;
