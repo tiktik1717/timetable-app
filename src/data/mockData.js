@@ -77,12 +77,18 @@ export const constraintGroups = [
     id: "english-a",
     name: "אנגלית שכבה א",
     color: "#ffd54f",
-    type: "sameTime",
+    rules: ["sameTime"],
   },
   {
     id: "computer-room",
     name: "חדר מחשבים",
     color: "#64b5f6",
-    type: "notSameTime",
+    rules: ["notSameTime"],
+  },
+  {
+    id: "sport",
+    name: "ספורט",
+    color: "#81c784",
+    rules: ["sameTime", "notSameDaySameClass"],
   },
 ];

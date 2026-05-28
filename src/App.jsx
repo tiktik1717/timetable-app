@@ -153,68 +153,45 @@ export default function App() {
         return prev;
       }
 
-      const group = prev.constraintGroups.find((g) => g.id === groupId);
-      const cleanSubject = subject.trim() || originalUnit.subject || "רגיל";
+      const isRemovingGroup = !groupId;
+      const cleanSubject = isRemovingGroup
+        ? "רגיל"
+        : subject.trim() || originalUnit.subject || "רגיל";
 
-      // אם בחרו ללא קבוצה
-      if (!groupId) {
-        return {
-          ...prev,
-          teachingUnits: mergeSimilarUnitsInList(
-            prev.teachingUnits.map((unit) =>
-              unit.id === unitId
-                ? {
-                  ...unit,
-                  constraintGroupId: null,
-                  subject: cleanSubject,
-                }
-                : unit
-            ),
-          )
+      const updatedUnits = prev.teachingUnits.flatMap((unit) => {
+        if (unit.id !== unitId) return [unit];
+
+        // שינוי כל היחידה
+        if (hoursNumber === originalUnit.hours) {
+          return [
+            {
+              ...originalUnit,
+              subject: cleanSubject,
+              constraintGroupId: groupId || null,
+            },
+          ];
+        }
+
+        // פיצול חלקי
+        const remainingOriginalUnit = {
+          ...originalUnit,
+          hours: originalUnit.hours - hoursNumber,
         };
 
-      }
-
-      // אם משייכים את כל השעות — אין צורך לפצל
-      if (hoursNumber === originalUnit.hours) {
-        return {
-          ...prev,
-          teachingUnits: mergeSimilarUnitsInList(
-            prev.teachingUnits.map((unit) =>
-              unit.id === unitId
-                ? {
-                  ...unit,
-                  subject: cleanSubject,
-                  constraintGroupId: groupId,
-                }
-                : unit
-            ),
-          )
+        const newSplitUnit = {
+          ...originalUnit,
+          id: `${originalUnit.id}-split-${Date.now()}`,
+          hours: hoursNumber,
+          subject: cleanSubject,
+          constraintGroupId: groupId || null,
         };
-      }
 
-      // פיצול: היחידה המקורית נשארת עם השעות שלא שויכו
-      const remainingUnit = {
-        ...originalUnit,
-        hours: originalUnit.hours - hoursNumber,
-        constraintGroupId: originalUnit.constraintGroupId || null,
-      };
-
-      const newUnit = {
-        ...originalUnit,
-        id: `${originalUnit.id}-split-${Date.now()}`,
-        hours: hoursNumber,
-        subject: cleanSubject,
-        constraintGroupId: groupId,
-      };
+        return [remainingOriginalUnit, newSplitUnit];
+      });
 
       return {
         ...prev,
-        teachingUnits: mergeSimilarUnitsInList(
-          prev.teachingUnits.flatMap((unit) =>
-            unit.id === unitId ? [remainingUnit, newUnit] : [unit]
-          ),
-        )
+        teachingUnits: mergeSimilarUnitsInList(updatedUnits),
       };
     });
 
@@ -232,6 +209,17 @@ export default function App() {
     setHistory((prevHistory) => [...prevHistory, currentSchedule]);
     setFuture([]);
     setSchedule(nextSchedule);
+  }
+
+  function groupHasRule(group, rule) {
+    if (!group) return false;
+
+    if (Array.isArray(group.rules)) {
+      return group.rules.includes(rule);
+    }
+
+    // תמיכה בנתונים ישנים שעדיין משתמשים ב-type
+    return group.type === rule;
   }
 
   useEffect(() => {
@@ -610,7 +598,7 @@ export default function App() {
 
   function isSameTimeGroup(unit) {
     const group = getConstraintGroupById(unit.constraintGroupId);
-    return group?.type === "sameTime";
+    return groupHasRule(group, "sameTime");
   }
 
   function getSameTimeGroupUnits(unit) {
@@ -618,7 +606,7 @@ export default function App() {
 
     const group = getConstraintGroupById(unit.constraintGroupId);
 
-    if (group?.type !== "sameTime") return [unit];
+    if (!groupHasRule(group, "sameTime")) return [unit];
 
     return teachingUnits.filter(
       (candidate) => candidate.constraintGroupId === unit.constraintGroupId
@@ -1346,7 +1334,7 @@ export default function App() {
                     splitUnitAndAssignGroup(
                       groupDialogUnit.id,
                       null,
-                      groupDialogUnit.hours,
+                      groupDialogHours,
                       groupDialogSubject
                     )
                   }
@@ -1372,7 +1360,14 @@ export default function App() {
                       style={{ backgroundColor: group.color }}
                     />
                     {group.name} —{" "}
-                    {group.type === "sameTime" ? "חייב ביחד" : "אסור ביחד"}
+                    {(group.rules || [group.type])
+                      .map((rule) => {
+                        if (rule === "sameTime") return "חייב באותו טור";
+                        if (rule === "notSameTime") return "אסור באותו טור";
+                        if (rule === "notSameDaySameClass") return "אסור באותה שורה";
+                        return rule;
+                      })
+                      .join(" + ")}
                   </button>
                 ))}
 

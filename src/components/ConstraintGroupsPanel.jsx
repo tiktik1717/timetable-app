@@ -1,3 +1,15 @@
+function getRuleLabels(group) {
+    const rules = group.rules || (group.type ? [group.type] : []);
+
+    const labels = {
+        sameTime: "חייב באותו טור",
+        notSameTime: "אסור באותו טור",
+        notSameDaySameClass: "אסור באותה שורה",
+    };
+
+    return rules.map((rule) => labels[rule] || rule).join(" + ");
+}
+
 export default function ConstraintGroupsPanel({ constraintGroups }) {
     return (
         <div className="constraint-panel">
@@ -15,9 +27,7 @@ export default function ConstraintGroupsPanel({ constraintGroups }) {
 
                         <span className="constraint-name">{group.name}</span>
 
-                        <span className="constraint-type">
-                            {group.type === "sameTime" ? "חייב ביחד" : "אסור ביחד"}
-                        </span>
+                        <span className="constraint-type">{getRuleLabels(group)}</span>
                     </div>
                 ))
             )}
