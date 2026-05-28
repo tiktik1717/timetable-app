@@ -23,6 +23,7 @@ import {
 
 import WarningsPanel from "./components/WarningsPanel";
 import ConstraintGroupDialog from "./components/ConstraintGroupDialog";
+import ShahafView from "./components/ShahafView";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -59,8 +60,9 @@ export default function App() {
   const [groupDialogSubject, setGroupDialogSubject] = useState("");
   const [singleDragUnitId, setSingleDragUnitId] = useState(null);
   const [highlightedGroupId, setHighlightedGroupId] = useState(null);
-  const [editingConstraintGroup, setEditingConstraintGroup] = useState(null);
   const [showConstraintGroupDialog, setShowConstraintGroupDialog] = useState(false);
+  const [editingConstraintGroup, setEditingConstraintGroup] = useState(null);
+
   const [schoolData, setSchoolData] = useState(() => {
     const defaultData = {
       teachers: mockTeachers,
@@ -94,6 +96,11 @@ export default function App() {
     teachingUnits = [],
     constraintGroups = [],
   } = schoolData;
+  
+  const [selectedClassForShahaf, setSelectedClassForShahaf] = useState(
+    classes[0] || ""
+  );
+
 
   const scheduleRef = useRef(schedule);
   const historyRef = useRef(history);
@@ -1345,6 +1352,16 @@ export default function App() {
           onHighlightGroup={setHighlightedGroupId}
         />
         <WarningsPanel warnings={warnings} />
+        <ShahafView
+          classes={classes}
+          days={days}
+          hours={hours}
+          selectedClassForShahaf={selectedClassForShahaf}
+          setSelectedClassForShahaf={setSelectedClassForShahaf}
+          getCellUnitIds={getCellUnitIds}
+          getUnitById={getUnitById}
+          getTeacherById={getTeacherById}
+        />
         <div
           className="table-scroll-wrapper"
           ref={tableScrollRef}

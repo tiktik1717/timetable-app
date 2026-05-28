@@ -531,3 +531,52 @@ th {
 
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
+
+.shahaf-view {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 14px;
+}
+
+.shahaf-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 10px;
+}
+
+.shahaf-header h3 {
+  margin: 0;
+}
+
+.shahaf-header select {
+  margin-right: 6px;
+  padding: 5px;
+}
+
+.shahaf-table {
+  border-collapse: collapse;
+  width: max-content;
+  background: white;
+}
+
+.shahaf-table th,
+.shahaf-table td {
+  border: 1px solid #999;
+  min-width: 110px;
+  height: 34px;
+  padding: 4px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.shahaf-hour {
+  font-weight: bold;
+  background: #f0f0f0;
+}
+
+.shahaf-cell div {
+  line-height: 1.3;
+}
