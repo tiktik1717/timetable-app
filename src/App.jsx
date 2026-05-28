@@ -448,6 +448,35 @@ export default function App() {
     return false;
   }
 
+  function hasNotSameTimeConflict(currentClass, currentHour, unit) {
+    const group = getConstraintGroupById(unit.constraintGroupId);
+
+    if (!groupHasRule(group, "notSameTime")) {
+      return false;
+    }
+
+    for (const className of classes) {
+      if (className === currentClass) continue;
+
+      const unitIds = getCellUnitIds(selectedDay, className, currentHour);
+
+      const hasSameGroup = unitIds.some((unitId) => {
+        const otherUnit = getUnitById(unitId);
+
+        return (
+          otherUnit &&
+          otherUnit.constraintGroupId === unit.constraintGroupId
+        );
+      });
+
+      if (hasSameGroup) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   function normalizeDay(value) {
     return String(value)
       .replaceAll("יום", "")
@@ -1269,7 +1298,8 @@ export default function App() {
                       .filter(
                         (unit) =>
                           hasTeacherConflict(className, hour, unit.teacherId) ||
-                          hasNotSameDaySameClassConflict(className, hour, unit)
+                          hasNotSameDaySameClassConflict(className, hour, unit) ||
+                          hasNotSameTimeConflict(className, hour, unit)
                       )
                       .map((unit) => unit.teacherId);
 
