@@ -27,6 +27,7 @@ import ShahafView from "./components/ShahafView";
 import TeacherView from "./components/TeacherView";
 import TeachersManager from "./components/TeachersManager";
 import ClassesManager from "./components/ClassesManager";
+import MeetingsManager from "./components/MeetingsManager";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -77,6 +78,7 @@ export default function App() {
       teachingUnits: mockTeachingUnits,
       constraintGroups: mockConstraintGroups,
       homeroomTeacherColor: "#c8e6c9",
+      meetings: [],
     };
 
     const savedSchoolData =
@@ -100,6 +102,7 @@ export default function App() {
     teachingLoads,
     teachingUnits = [],
     constraintGroups = [],
+    meetings = [],
   } = schoolData;
 
   const [selectedClassForShahaf, setSelectedClassForShahaf] = useState(
@@ -1305,6 +1308,13 @@ export default function App() {
           >
             ניהול כיתות
           </button>
+
+          <button
+            className={activeView === "meetings" ? "active-tab" : ""}
+            onClick={() => setActiveView("meetings")}
+          >
+            ישיבות צוות
+          </button>
         </div>
 
         {activeView === "scheduler" && (
@@ -1613,6 +1623,14 @@ export default function App() {
             classes={classes}
             teachers={teachers}
             homeroomTeacherColor={schoolData.homeroomTeacherColor || "#c8e6c9"}
+            setSchoolData={setSchoolData}
+          />
+        )}
+
+        {activeView === "meetings" && (
+          <MeetingsManager
+            teachers={teachers}
+            meetings={meetings}
             setSchoolData={setSchoolData}
           />
         )}

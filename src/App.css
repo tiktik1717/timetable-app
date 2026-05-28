@@ -731,3 +731,36 @@ th {
   padding: 2px;
   cursor: pointer;
 }
+
+.meetings-manager {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.meeting-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 12px;
+  background: #fafafa;
+}
+
+.meeting-card-header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.meeting-card-header input {
+  padding: 6px;
+  min-width: 240px;
+}
+
+.meeting-teachers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
