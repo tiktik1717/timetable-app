@@ -677,6 +677,55 @@ export default function App() {
     setSelectedCell(null);
   }
 
+  function mergeSimilarUnits() {
+    setSchoolData((prev) => {
+      const mergedMap = new Map();
+      const result = [];
+
+      for (const unit of prev.teachingUnits) {
+        if (isUnitScheduled(unit.id)) {
+          result.push(unit);
+          continue;
+        }
+
+        const key = [
+          unit.className,
+          unit.teacherId,
+          unit.subject || "רגיל",
+          unit.constraintGroupId || "",
+        ].join("|");
+
+        if (mergedMap.has(key)) {
+          const existingUnit = mergedMap.get(key);
+          existingUnit.hours += unit.hours;
+        } else {
+          const copy = { ...unit };
+          mergedMap.set(key, copy);
+          result.push(copy);
+        }
+      }
+
+      return {
+        ...prev,
+        teachingUnits: result,
+      };
+    });
+  }
+
+  function isUnitScheduled(unitId) {
+    for (const day of days) {
+      for (const className of classes) {
+        for (const hour of hours) {
+          if (getCellUnitIds(day, className, hour).includes(unitId)) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
+  }
+
   function moveSingleUnitWithinRow(fromClass, fromHour, toClass, toHour, unitId) {
     if (fromClass !== toClass) {
       alert("אפשר לגרור רק בתוך אותה שורה / אותה כיתה");
@@ -1062,6 +1111,10 @@ export default function App() {
             נקה מערכת
           </button>
 
+          <button className="action-button" onClick={mergeSimilarUnits}>
+            מזג יחידות דומות
+          </button>
+          
           <label className="upload-button">
             ייבוא Excel
             <input
