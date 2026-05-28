@@ -423,3 +423,27 @@ th {
   outline: 3px solid #2196f3;
   outline-offset: 1px;
 }
+
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px 0;
+  font-weight: bold;
+}
+
+.dialog-field input {
+  padding: 7px;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+}
+
+.dialog-cancel {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: none;
+  background: #777;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+}

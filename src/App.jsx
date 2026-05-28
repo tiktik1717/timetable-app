@@ -52,6 +52,8 @@ export default function App() {
   const [future, setFuture] = useState([]);
   const [importedExcel, setImportedExcel] = useState(null);
   const [groupDialogUnit, setGroupDialogUnit] = useState(null);
+  const [groupDialogHours, setGroupDialogHours] = useState("");
+  const [groupDialogSubject, setGroupDialogSubject] = useState("");
   const [singleDragUnitId, setSingleDragUnitId] = useState(null);
   const [highlightedGroupId, setHighlightedGroupId] = useState(null);
   const [schoolData, setSchoolData] = useState(() => {
@@ -133,20 +135,85 @@ export default function App() {
     setFuture(newFuture);
   }
 
-  function assignUnitToGroup(unitId, groupId) {
-    setSchoolData((prev) => ({
-      ...prev,
-      teachingUnits: prev.teachingUnits.map((unit) =>
-        unit.id === unitId
-          ? {
-            ...unit,
-            constraintGroupId: groupId || null,
-          }
-          : unit
-      ),
-    }));
+  function splitUnitAndAssignGroup(unitId, groupId, hoursToAssign, subject) {
+    setSchoolData((prev) => {
+      const originalUnit = prev.teachingUnits.find((unit) => unit.id === unitId);
+
+      if (!originalUnit) return prev;
+
+      const hoursNumber = Number(hoursToAssign);
+
+      if (!hoursNumber || hoursNumber <= 0) {
+        alert("יש להזין מספר שעות תקין");
+        return prev;
+      }
+
+      if (hoursNumber > originalUnit.hours) {
+        alert("אי אפשר לשייך יותר שעות ממספר השעות של היחידה");
+        return prev;
+      }
+
+      const group = prev.constraintGroups.find((g) => g.id === groupId);
+      const cleanSubject = subject.trim() || originalUnit.subject || "רגיל";
+
+      // אם בחרו ללא קבוצה
+      if (!groupId) {
+        return {
+          ...prev,
+          teachingUnits: prev.teachingUnits.map((unit) =>
+            unit.id === unitId
+              ? {
+                ...unit,
+                constraintGroupId: null,
+                subject: cleanSubject,
+              }
+              : unit
+          ),
+        };
+      }
+
+      // אם משייכים את כל השעות — אין צורך לפצל
+      if (hoursNumber === originalUnit.hours) {
+        return {
+          ...prev,
+          teachingUnits: prev.teachingUnits.map((unit) =>
+            unit.id === unitId
+              ? {
+                ...unit,
+                subject: cleanSubject,
+                constraintGroupId: groupId,
+              }
+              : unit
+          ),
+        };
+      }
+
+      // פיצול: היחידה המקורית נשארת עם השעות שלא שויכו
+      const remainingUnit = {
+        ...originalUnit,
+        hours: originalUnit.hours - hoursNumber,
+        constraintGroupId: originalUnit.constraintGroupId || null,
+      };
+
+      const newUnit = {
+        ...originalUnit,
+        id: `${originalUnit.id}-split-${Date.now()}`,
+        hours: hoursNumber,
+        subject: cleanSubject,
+        constraintGroupId: groupId,
+      };
+
+      return {
+        ...prev,
+        teachingUnits: prev.teachingUnits.flatMap((unit) =>
+          unit.id === unitId ? [remainingUnit, newUnit] : [unit]
+        ),
+      };
+    });
 
     setGroupDialogUnit(null);
+    setGroupDialogHours("");
+    setGroupDialogSubject("");
   }
 
   function updateScheduleWithHistory(updater) {
@@ -1063,7 +1130,13 @@ export default function App() {
                             displayMode={displayMode}
                             isFreeDay={isFreeDay}
                             group={group}
-                            onAssignGroup={setGroupDialogUnit}
+                            onAssignGroup={(unit) => {
+                              setGroupDialogUnit(unit);
+                              setGroupDialogHours(String(unit.hours));
+                              setGroupDialogSubject(
+                                unit.subject && unit.subject !== "רגיל" ? unit.subject : ""
+                              );
+                            }}
                             onHighlightGroup={setHighlightedGroupId}
                             highlightedGroup={isHighlightedGroup(unit)}
                           />
@@ -1151,7 +1224,7 @@ export default function App() {
           {groupDialogUnit && (
             <div className="modal-backdrop" onClick={() => setGroupDialogUnit(null)}>
               <div className="group-dialog" onClick={(e) => e.stopPropagation()}>
-                <h3>שיוך לקבוצת שיבוץ</h3>
+                <h3>פיצול ושיוך לקבוצת שיבוץ</h3>
 
                 <p>
                   יחידה:{" "}
@@ -1163,9 +1236,39 @@ export default function App() {
                   </strong>
                 </p>
 
+                <p>סה״כ שעות ביחידה: {groupDialogUnit.hours}</p>
+
+                <label className="dialog-field">
+                  מספר שעות לשיוך:
+                  <input
+                    type="number"
+                    min="1"
+                    max={groupDialogUnit.hours}
+                    value={groupDialogHours}
+                    onChange={(e) => setGroupDialogHours(e.target.value)}
+                  />
+                </label>
+
+                <label className="dialog-field">
+                  מקצוע / תיאור:
+                  <input
+                    type="text"
+                    placeholder="לדוגמה: אנגלית"
+                    value={groupDialogSubject}
+                    onChange={(e) => setGroupDialogSubject(e.target.value)}
+                  />
+                </label>
+
                 <button
                   className="group-option no-group"
-                  onClick={() => assignUnitToGroup(groupDialogUnit.id, null)}
+                  onClick={() =>
+                    splitUnitAndAssignGroup(
+                      groupDialogUnit.id,
+                      null,
+                      groupDialogUnit.hours,
+                      groupDialogSubject
+                    )
+                  }
                 >
                   ללא קבוצה
                 </button>
@@ -1174,7 +1277,14 @@ export default function App() {
                   <button
                     key={group.id}
                     className="group-option"
-                    onClick={() => assignUnitToGroup(groupDialogUnit.id, group.id)}
+                    onClick={() =>
+                      splitUnitAndAssignGroup(
+                        groupDialogUnit.id,
+                        group.id,
+                        groupDialogHours,
+                        groupDialogSubject
+                      )
+                    }
                   >
                     <span
                       className="constraint-color"
@@ -1184,6 +1294,10 @@ export default function App() {
                     {group.type === "sameTime" ? "חייב ביחד" : "אסור ביחד"}
                   </button>
                 ))}
+
+                <button className="dialog-cancel" onClick={() => setGroupDialogUnit(null)}>
+                  ביטול
+                </button>
               </div>
             </div>
           )}
