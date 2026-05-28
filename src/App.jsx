@@ -160,31 +160,36 @@ export default function App() {
       if (!groupId) {
         return {
           ...prev,
-          teachingUnits: prev.teachingUnits.map((unit) =>
-            unit.id === unitId
-              ? {
-                ...unit,
-                constraintGroupId: null,
-                subject: cleanSubject,
-              }
-              : unit
-          ),
+          teachingUnits: mergeSimilarUnitsInList(
+            prev.teachingUnits.map((unit) =>
+              unit.id === unitId
+                ? {
+                  ...unit,
+                  constraintGroupId: null,
+                  subject: cleanSubject,
+                }
+                : unit
+            ),
+          )
         };
+
       }
 
       // אם משייכים את כל השעות — אין צורך לפצל
       if (hoursNumber === originalUnit.hours) {
         return {
           ...prev,
-          teachingUnits: prev.teachingUnits.map((unit) =>
-            unit.id === unitId
-              ? {
-                ...unit,
-                subject: cleanSubject,
-                constraintGroupId: groupId,
-              }
-              : unit
-          ),
+          teachingUnits: mergeSimilarUnitsInList(
+            prev.teachingUnits.map((unit) =>
+              unit.id === unitId
+                ? {
+                  ...unit,
+                  subject: cleanSubject,
+                  constraintGroupId: groupId,
+                }
+                : unit
+            ),
+          )
         };
       }
 
@@ -205,9 +210,11 @@ export default function App() {
 
       return {
         ...prev,
-        teachingUnits: prev.teachingUnits.flatMap((unit) =>
-          unit.id === unitId ? [remainingUnit, newUnit] : [unit]
-        ),
+        teachingUnits: mergeSimilarUnitsInList(
+          prev.teachingUnits.flatMap((unit) =>
+            unit.id === unitId ? [remainingUnit, newUnit] : [unit]
+          ),
+        )
       };
     });
 
@@ -240,6 +247,31 @@ export default function App() {
 
   function getTeacherById(teacherId) {
     return teachers.find((teacher) => teacher.id === String(teacherId));
+  }
+
+  function mergeSimilarUnitsInList(units) {
+    const mergedMap = new Map();
+    const result = [];
+
+    for (const unit of units) {
+      const key = [
+        unit.className,
+        unit.teacherId,
+        unit.subject || "רגיל",
+        unit.constraintGroupId || "",
+      ].join("|");
+
+      if (mergedMap.has(key)) {
+        const existingUnit = mergedMap.get(key);
+        existingUnit.hours += unit.hours;
+      } else {
+        const copy = { ...unit };
+        mergedMap.set(key, copy);
+        result.push(copy);
+      }
+    }
+
+    return result;
   }
 
   useEffect(() => {
@@ -1111,10 +1143,6 @@ export default function App() {
             נקה מערכת
           </button>
 
-          <button className="action-button" onClick={mergeSimilarUnits}>
-            מזג יחידות דומות
-          </button>
-          
           <label className="upload-button">
             ייבוא Excel
             <input
