@@ -22,6 +22,7 @@ import {
 } from "./data/mockData";
 
 import WarningsPanel from "./components/WarningsPanel";
+import ConstraintGroupDialog from "./components/ConstraintGroupDialog";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -58,6 +59,8 @@ export default function App() {
   const [groupDialogSubject, setGroupDialogSubject] = useState("");
   const [singleDragUnitId, setSingleDragUnitId] = useState(null);
   const [highlightedGroupId, setHighlightedGroupId] = useState(null);
+  const [editingConstraintGroup, setEditingConstraintGroup] = useState(null);
+  const [showConstraintGroupDialog, setShowConstraintGroupDialog] = useState(false);
   const [schoolData, setSchoolData] = useState(() => {
     const defaultData = {
       teachers: mockTeachers,
@@ -250,6 +253,50 @@ export default function App() {
     }
 
     return warnings;
+  }
+
+  function saveConstraintGroup(groupToSave) {
+    setSchoolData((prev) => {
+      const exists = prev.constraintGroups.some(
+        (group) => group.id === groupToSave.id
+      );
+
+      const constraintGroups = exists
+        ? prev.constraintGroups.map((group) =>
+          group.id === groupToSave.id ? groupToSave : group
+        )
+        : [...prev.constraintGroups, groupToSave];
+
+      return {
+        ...prev,
+        constraintGroups,
+      };
+    });
+
+    setEditingConstraintGroup(null);
+    setShowConstraintGroupDialog(false);
+  }
+
+  function deleteConstraintGroup(groupId) {
+    if (!confirm("למחוק את קבוצת השיבוץ? השיוך יוסר מכל היחידות.")) {
+      return;
+    }
+
+    setSchoolData((prev) => ({
+      ...prev,
+      constraintGroups: prev.constraintGroups.filter(
+        (group) => group.id !== groupId
+      ),
+      teachingUnits: prev.teachingUnits.map((unit) =>
+        unit.constraintGroupId === groupId
+          ? { ...unit, constraintGroupId: null }
+          : unit
+      ),
+    }));
+
+    if (highlightedGroupId === groupId) {
+      setHighlightedGroupId(null);
+    }
   }
 
   function updateScheduleWithHistory(updater) {
@@ -1282,7 +1329,19 @@ export default function App() {
           </label>
         </div>
 
-        <ConstraintGroupsPanel constraintGroups={constraintGroups} />
+        <ConstraintGroupsPanel
+          constraintGroups={constraintGroups}
+          onCreateGroup={() => {
+            setEditingConstraintGroup(null);
+            setShowConstraintGroupDialog(true);
+          }}
+          onEditGroup={(group) => {
+            setEditingConstraintGroup(group);
+            setShowConstraintGroupDialog(true);
+          }}
+          onDeleteGroup={deleteConstraintGroup}
+          onHighlightGroup={setHighlightedGroupId}
+        />
         <WarningsPanel warnings={warnings} />
         <div
           className="table-scroll-wrapper"
@@ -1508,8 +1567,21 @@ export default function App() {
                 <button className="dialog-cancel" onClick={() => setGroupDialogUnit(null)}>
                   ביטול
                 </button>
+
+
               </div>
             </div>
+          )}
+
+          {showConstraintGroupDialog && (
+            <ConstraintGroupDialog
+              group={editingConstraintGroup}
+              onSave={saveConstraintGroup}
+              onCancel={() => {
+                setEditingConstraintGroup(null);
+                setShowConstraintGroupDialog(false);
+              }}
+            />
           )}
         </div>
 

@@ -466,3 +466,40 @@ th {
   color: #2e7d32;
   font-weight: bold;
 }
+
+.small-action-button {
+  padding: 5px 9px;
+  border: none;
+  background: #1976d2;
+  color: white;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.mini-button {
+  border: none;
+  background: #eeeeee;
+  padding: 3px 7px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.danger-mini-button {
+  background: #ffcdd2;
+  color: #b71c1c;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.dialog-field input[type="color"] {
+  width: 90px;
+  height: 42px;
+  padding: 2px;
+  cursor: pointer;
+}

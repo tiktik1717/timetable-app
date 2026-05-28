@@ -1,4 +1,5 @@
 import { useDraggable } from "@dnd-kit/core";
+import { getReadableTextColor } from "../utils/colorUtils";
 
 export default function LoadItem({
   unit,
@@ -22,11 +23,14 @@ export default function LoadItem({
     disabled: remaining <= 0 || isFreeDay,
   });
 
+  const backgroundColor = group?.color || undefined;
+
   const style = {
     transform: transform
       ? `translate(${transform.x}px, ${transform.y}px)`
       : undefined,
-    backgroundColor: group?.color || undefined,
+    backgroundColor,
+    color: getReadableTextColor(backgroundColor),
   };
 
   const label =

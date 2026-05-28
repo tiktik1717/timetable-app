@@ -1,4 +1,5 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { getReadableTextColor } from "../utils/colorUtils";
 
 export default function DroppableCell({
   className,
@@ -70,7 +71,7 @@ export default function DroppableCell({
             const isConflicting = conflictingTeacherIds.includes(
               unit.teacherId
             );
-
+            const backgroundColor = group?.color || undefined;
             return (
               <div
                 key={unit.id}
@@ -81,7 +82,8 @@ export default function DroppableCell({
                   isHighlighted ? "group-highlight" : "",
                 ].join(" ")}
                 style={{
-                  backgroundColor: group?.color || undefined,
+                  backgroundColor,
+                  color: getReadableTextColor(backgroundColor),
                 }}
               >
                 {displayMode === "names"
