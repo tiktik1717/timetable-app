@@ -24,6 +24,7 @@ import {
 import WarningsPanel from "./components/WarningsPanel";
 import ConstraintGroupDialog from "./components/ConstraintGroupDialog";
 import ShahafView from "./components/ShahafView";
+import TeacherView from "./components/TeacherView";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -62,6 +63,7 @@ export default function App() {
   const [highlightedGroupId, setHighlightedGroupId] = useState(null);
   const [showConstraintGroupDialog, setShowConstraintGroupDialog] = useState(false);
   const [editingConstraintGroup, setEditingConstraintGroup] = useState(null);
+  const [activeView, setActiveView] = useState("scheduler");
 
   const [schoolData, setSchoolData] = useState(() => {
     const defaultData = {
@@ -96,11 +98,13 @@ export default function App() {
     teachingUnits = [],
     constraintGroups = [],
   } = schoolData;
-  
+
   const [selectedClassForShahaf, setSelectedClassForShahaf] = useState(
     classes[0] || ""
   );
-
+  const [selectedTeacherForView, setSelectedTeacherForView] = useState(
+    teachers[0]?.id || ""
+  );
 
   const scheduleRef = useRef(schedule);
   const historyRef = useRef(history);
@@ -1187,6 +1191,7 @@ export default function App() {
 
 
   return (
+
     <DndContext
       onDragStart={(event) => {
         const draggedUnit =
@@ -1237,378 +1242,427 @@ export default function App() {
         setHighlightedGroupId(null);
       }}
     >
+
+
       <div className="container">
         <h1>מערכת שעות - אב טיפוס</h1>
 
-        <div className="top-bar">
-          <div className="days-bar">
-            {days.map((day) => (
-              <button
-                key={day}
-                className={
-                  selectedDay === day
-                    ? "day-button active-day"
-                    : "day-button"
-                }
-                onClick={() => {
-                  setSelectedDay(day);
-                  setSelectedCell(null);
-                }}
-              >
-                יום {day}
-              </button>
-            ))}
-          </div>
-
-          <label className="display-mode">
-            תצוגה:
-            <select
-              value={displayMode}
-              onChange={(e) => setDisplayMode(e.target.value)}
-            >
-              <option value="names">שמות</option>
-              <option value="codes">קודים</option>
-            </select>
-          </label>
-
+        <div className="view-tabs">
           <button
-            className="action-button"
-            onClick={undo}
-            disabled={history.length === 0}
+            className={activeView === "scheduler" ? "active-tab" : ""}
+            onClick={() => setActiveView("scheduler")}
           >
-            ביטול פעולה
+            בונה מערכת
           </button>
 
           <button
-            className="action-button"
-            onClick={redo}
-            disabled={future.length === 0}
+            className={activeView === "shahaf" ? "active-tab" : ""}
+            onClick={() => setActiveView("shahaf")}
           >
-            בצע שוב
+            תצוגת כיתות
           </button>
-
           <button
-            className="clear-button"
-            onClick={() => {
-              if (confirm("האם למחוק את כל השיבוצים?")) {
-                setSchedule({});
-                setHistory([]);
-                setFuture([]);
-                localStorage.removeItem("schoolSchedule");
-              }
-              setSchoolData((prev) => {
-                const cleanedSchoolData = {
-                  ...prev,
-                  teachingUnits: prev.teachingUnits.map((unit) => ({
-                    ...unit,
-                    constraintGroupId: null,
-                    color: null,
-                  })),
-                };
-
-                localStorage.setItem(
-                  "schoolData",
-                  JSON.stringify(cleanedSchoolData)
-                );
-
-                return cleanedSchoolData;
-              });
-            }}
+            className={activeView === "teacher" ? "active-tab" : ""}
+            onClick={() => setActiveView("teacher")}
           >
-            נקה מערכת
+            תצוגת מורה
           </button>
-
-          <label className="upload-button">
-            ייבוא Excel
-            <input
-              type="file"
-              accept=".xlsx,.xlsm,.xls"
-              onChange={handleExcelUpload}
-              hidden
-            />
-          </label>
-
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={showFreeDayTeachers}
-              onChange={(e) => setShowFreeDayTeachers(e.target.checked)}
-            />
-            הצג מורים ביום חופשי
-          </label>
         </div>
 
-        <ConstraintGroupsPanel
-          constraintGroups={constraintGroups}
-          onCreateGroup={() => {
-            setEditingConstraintGroup(null);
-            setShowConstraintGroupDialog(true);
-          }}
-          onEditGroup={(group) => {
-            setEditingConstraintGroup(group);
-            setShowConstraintGroupDialog(true);
-          }}
-          onDeleteGroup={deleteConstraintGroup}
-          onHighlightGroup={setHighlightedGroupId}
-        />
-        <WarningsPanel warnings={warnings} />
-        <ShahafView
-          classes={classes}
-          days={days}
-          hours={hours}
-          selectedClassForShahaf={selectedClassForShahaf}
-          setSelectedClassForShahaf={setSelectedClassForShahaf}
-          getCellUnitIds={getCellUnitIds}
-          getUnitById={getUnitById}
-          getTeacherById={getTeacherById}
-        />
-        <div
-          className="table-scroll-wrapper"
-          ref={tableScrollRef}
-          tabIndex={0}
-        >
-          <table>
-            <thead>
-              <tr>
-                <th>מחסן שעות</th>
-                <th>כיתה</th>
-                {hours.map((hour) => (
-                  <th
-                    key={hour}
+        {activeView === "scheduler" && (
+          <>
+            <div className="top-bar">
+              <div className="days-bar">
+                {days.map((day) => (
+                  <button
+                    key={day}
                     className={
-                      hoveredCell?.hour === String(hour) ? "highlighted-header" : ""
+                      selectedDay === day
+                        ? "day-button active-day"
+                        : "day-button"
                     }
+                    onClick={() => {
+                      setSelectedDay(day);
+                      setSelectedCell(null);
+                    }}
                   >
-                    שעה {hour}
-                  </th>))}
-              </tr>
-            </thead>
+                    יום {day}
+                  </button>
+                ))}
+              </div>
 
-            <tbody>
-              {classes.map((className) => (
-                <tr key={className}>
+              <label className="display-mode">
+                תצוגה:
+                <select
+                  value={displayMode}
+                  onChange={(e) => setDisplayMode(e.target.value)}
+                >
+                  <option value="names">שמות</option>
+                  <option value="codes">קודים</option>
+                </select>
+              </label>
 
-                  <LoadCell className={className}>
-                    {teachingUnits
-                      .filter((unit) => unit.className === className)
-                      .map((unit) => {
-                        const teacher = getTeacherById(unit.teacherId);
-                        const remaining = getRemainingUnitHours(unit.id);
-                        const isFreeDay = isTeacherFreeDay(unit.teacherId, selectedDay);
+              <button
+                className="action-button"
+                onClick={undo}
+                disabled={history.length === 0}
+              >
+                ביטול פעולה
+              </button>
 
-                        if (!showFreeDayTeachers && isFreeDay) return null;
-                        const group = getConstraintGroupById(unit.constraintGroupId);
+              <button
+                className="action-button"
+                onClick={redo}
+                disabled={future.length === 0}
+              >
+                בצע שוב
+              </button>
+
+              <button
+                className="clear-button"
+                onClick={() => {
+                  if (confirm("האם למחוק את כל השיבוצים?")) {
+                    setSchedule({});
+                    setHistory([]);
+                    setFuture([]);
+                    localStorage.removeItem("schoolSchedule");
+                  }
+                  setSchoolData((prev) => {
+                    const cleanedSchoolData = {
+                      ...prev,
+                      teachingUnits: prev.teachingUnits.map((unit) => ({
+                        ...unit,
+                        constraintGroupId: null,
+                        color: null,
+                      })),
+                    };
+
+                    localStorage.setItem(
+                      "schoolData",
+                      JSON.stringify(cleanedSchoolData)
+                    );
+
+                    return cleanedSchoolData;
+                  });
+                }}
+              >
+                נקה מערכת
+              </button>
+
+              <label className="upload-button">
+                ייבוא Excel
+                <input
+                  type="file"
+                  accept=".xlsx,.xlsm,.xls"
+                  onChange={handleExcelUpload}
+                  hidden
+                />
+              </label>
+
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={showFreeDayTeachers}
+                  onChange={(e) => setShowFreeDayTeachers(e.target.checked)}
+                />
+                הצג מורים ביום חופשי
+              </label>
+            </div>
+
+            <ConstraintGroupsPanel
+              constraintGroups={constraintGroups}
+              onCreateGroup={() => {
+                setEditingConstraintGroup(null);
+                setShowConstraintGroupDialog(true);
+              }}
+              onEditGroup={(group) => {
+                setEditingConstraintGroup(group);
+                setShowConstraintGroupDialog(true);
+              }}
+              onDeleteGroup={deleteConstraintGroup}
+              onHighlightGroup={setHighlightedGroupId}
+            />
+            <WarningsPanel warnings={warnings} />
+
+            <div
+              className="table-scroll-wrapper"
+              ref={tableScrollRef}
+              tabIndex={0}
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>מחסן שעות</th>
+                    <th>כיתה</th>
+                    {hours.map((hour) => (
+                      <th
+                        key={hour}
+                        className={
+                          hoveredCell?.hour === String(hour) ? "highlighted-header" : ""
+                        }
+                      >
+                        שעה {hour}
+                      </th>))}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {classes.map((className) => (
+                    <tr key={className}>
+
+                      <LoadCell className={className}>
+                        {teachingUnits
+                          .filter((unit) => unit.className === className)
+                          .map((unit) => {
+                            const teacher = getTeacherById(unit.teacherId);
+                            const remaining = getRemainingUnitHours(unit.id);
+                            const isFreeDay = isTeacherFreeDay(unit.teacherId, selectedDay);
+
+                            if (!showFreeDayTeachers && isFreeDay) return null;
+                            const group = getConstraintGroupById(unit.constraintGroupId);
+                            return (
+                              <LoadItem
+                                key={unit.id}
+                                unit={unit}
+                                teacher={teacher}
+                                remaining={remaining}
+                                placements={getUnitPlacements(unit.id)}
+                                displayMode={displayMode}
+                                isFreeDay={isFreeDay}
+                                group={group}
+                                onAssignGroup={(unit) => {
+                                  setGroupDialogUnit(unit);
+                                  setGroupDialogHours(String(unit.hours));
+                                  setGroupDialogSubject(
+                                    unit.subject && unit.subject !== "רגיל" ? unit.subject : ""
+                                  );
+                                }}
+                                onHighlightGroup={setHighlightedGroupId}
+                                highlightedGroup={isHighlightedGroup(unit)}
+                              />
+                            );
+                          })
+                        }
+                      </LoadCell>
+
+                      <td
+                        className={
+                          hoveredCell?.className === className
+                            ? "class-name highlighted-header"
+                            : "class-name"
+                        }
+                      >
+                        {className}
+                      </td>
+
+                      {hours.map((hour) => {
+                        const unitIds = getCellUnitIds(selectedDay, className, hour);
+                        const units = unitIds.map(getUnitById).filter(Boolean);
+
+                        const teachersByUnit = {};
+                        const groupsByUnit = {};
+
+                        for (const unit of units) {
+                          teachersByUnit[unit.id] = getTeacherById(unit.teacherId);
+                          groupsByUnit[unit.id] = getConstraintGroupById(unit.constraintGroupId);
+                        }
+
+                        const conflictingTeacherIds = units
+                          .filter(
+                            (unit) =>
+                              hasTeacherConflict(className, hour, unit.teacherId) ||
+                              hasNotSameDaySameClassConflict(className, hour, unit) ||
+                              hasNotSameTimeConflict(className, hour, unit)
+                          )
+                          .map((unit) => unit.teacherId);
+
+                        const selected =
+                          selectedCell?.className === className &&
+                          selectedCell?.hour === String(hour);
+
+                        const highlighted =
+                          hoveredCell?.className === className &&
+                          hoveredCell?.hour === String(hour);
+
+                        const highlightedUnitIds = new Set(
+                          units
+                            .filter(
+                              (unit) =>
+                                highlightedGroupId &&
+                                unit.constraintGroupId === highlightedGroupId
+                            )
+                            .map((unit) => unit.id)
+                        );
+
                         return (
-                          <LoadItem
-                            key={unit.id}
-                            unit={unit}
-                            teacher={teacher}
-                            remaining={remaining}
-                            placements={getUnitPlacements(unit.id)}
+                          <DroppableCell
+                            key={hour}
+                            className={className}
+                            hour={hour}
+                            units={units}
+                            teachersByUnit={teachersByUnit}
+                            groupsByUnit={groupsByUnit}
+                            conflictingTeacherIds={conflictingTeacherIds}
+                            highlightedUnitIds={highlightedUnitIds}
+                            selected={selected}
+                            highlighted={highlighted}
                             displayMode={displayMode}
-                            isFreeDay={isFreeDay}
-                            group={group}
-                            onAssignGroup={(unit) => {
-                              setGroupDialogUnit(unit);
-                              setGroupDialogHours(String(unit.hours));
-                              setGroupDialogSubject(
-                                unit.subject && unit.subject !== "רגיל" ? unit.subject : ""
-                              );
+                            onClick={() => {
+                              setSelectedCell({
+                                className,
+                                hour: String(hour),
+                              });
+
+                              const firstUnit = units[0];
+
+                              setHighlightedGroupId(firstUnit?.constraintGroupId || null);
                             }}
-                            onHighlightGroup={setHighlightedGroupId}
-                            highlightedGroup={isHighlightedGroup(unit)}
                           />
                         );
-                      })
-                    }
-                  </LoadCell>
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="hint">
+              Delete מוחק תא מסומן. גרירה למחסן מוחקת שיבוץ. Ctrl + גרירה מתא לתא
+              מבצע החלפה.
+            </p>
 
-                  <td
-                    className={
-                      hoveredCell?.className === className
-                        ? "class-name highlighted-header"
-                        : "class-name"
-                    }
-                  >
-                    {className}
-                  </td>
+          </>
+        )}
 
-                  {hours.map((hour) => {
-                    const unitIds = getCellUnitIds(selectedDay, className, hour);
-                    const units = unitIds.map(getUnitById).filter(Boolean);
 
-                    const teachersByUnit = {};
-                    const groupsByUnit = {};
+        {activeView === "shahaf" && (
+          <ShahafView
+            classes={classes}
+            days={days}
+            hours={hours}
+            selectedClassForShahaf={selectedClassForShahaf}
+            setSelectedClassForShahaf={setSelectedClassForShahaf}
+            getCellUnitIds={getCellUnitIds}
+            getUnitById={getUnitById}
+            getTeacherById={getTeacherById}
+          />
+        )}
 
-                    for (const unit of units) {
-                      teachersByUnit[unit.id] = getTeacherById(unit.teacherId);
-                      groupsByUnit[unit.id] = getConstraintGroupById(unit.constraintGroupId);
-                    }
+        {activeView === "teacher" && (
+          <TeacherView
+            teachers={teachers}
+            classes={classes}
+            days={days}
+            hours={hours}
+            selectedTeacherForView={selectedTeacherForView}
+            setSelectedTeacherForView={setSelectedTeacherForView}
+            getCellUnitIds={getCellUnitIds}
+            getUnitById={getUnitById}
+          />
+        )}
+        
+        {groupDialogUnit && (
+          <div className="modal-backdrop" onClick={() => setGroupDialogUnit(null)}>
+            <div className="group-dialog" onClick={(e) => e.stopPropagation()}>
+              <h3>פיצול ושיוך לקבוצת שיבוץ</h3>
 
-                    const conflictingTeacherIds = units
-                      .filter(
-                        (unit) =>
-                          hasTeacherConflict(className, hour, unit.teacherId) ||
-                          hasNotSameDaySameClassConflict(className, hour, unit) ||
-                          hasNotSameTimeConflict(className, hour, unit)
-                      )
-                      .map((unit) => unit.teacherId);
+              <p>
+                יחידה:{" "}
+                <strong>
+                  {getTeacherById(groupDialogUnit.teacherId)?.name}
+                  {groupDialogUnit.subject && groupDialogUnit.subject !== "רגיל"
+                    ? ` / ${groupDialogUnit.subject}`
+                    : ""}
+                </strong>
+              </p>
 
-                    const selected =
-                      selectedCell?.className === className &&
-                      selectedCell?.hour === String(hour);
+              <p>סה״כ שעות ביחידה: {groupDialogUnit.hours}</p>
 
-                    const highlighted =
-                      hoveredCell?.className === className &&
-                      hoveredCell?.hour === String(hour);
+              <label className="dialog-field">
+                מספר שעות לשיוך:
+                <input
+                  type="number"
+                  min="1"
+                  max={groupDialogUnit.hours}
+                  value={groupDialogHours}
+                  onChange={(e) => setGroupDialogHours(e.target.value)}
+                />
+              </label>
 
-                    const highlightedUnitIds = new Set(
-                      units
-                        .filter(
-                          (unit) =>
-                            highlightedGroupId &&
-                            unit.constraintGroupId === highlightedGroupId
-                        )
-                        .map((unit) => unit.id)
-                    );
+              <label className="dialog-field">
+                מקצוע / תיאור:
+                <input
+                  type="text"
+                  placeholder="לדוגמה: אנגלית"
+                  value={groupDialogSubject}
+                  onChange={(e) => setGroupDialogSubject(e.target.value)}
+                />
+              </label>
 
-                    return (
-                      <DroppableCell
-                        key={hour}
-                        className={className}
-                        hour={hour}
-                        units={units}
-                        teachersByUnit={teachersByUnit}
-                        groupsByUnit={groupsByUnit}
-                        conflictingTeacherIds={conflictingTeacherIds}
-                        highlightedUnitIds={highlightedUnitIds}
-                        selected={selected}
-                        highlighted={highlighted}
-                        displayMode={displayMode}
-                        onClick={() => {
-                          setSelectedCell({
-                            className,
-                            hour: String(hour),
-                          });
+              <button
+                className="group-option no-group"
+                onClick={() =>
+                  splitUnitAndAssignGroup(
+                    groupDialogUnit.id,
+                    null,
+                    groupDialogHours,
+                    groupDialogSubject
+                  )
+                }
+              >
+                ללא קבוצה
+              </button>
 
-                          const firstUnit = units[0];
-
-                          setHighlightedGroupId(firstUnit?.constraintGroupId || null);
-                        }}
-                      />
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {groupDialogUnit && (
-            <div className="modal-backdrop" onClick={() => setGroupDialogUnit(null)}>
-              <div className="group-dialog" onClick={(e) => e.stopPropagation()}>
-                <h3>פיצול ושיוך לקבוצת שיבוץ</h3>
-
-                <p>
-                  יחידה:{" "}
-                  <strong>
-                    {getTeacherById(groupDialogUnit.teacherId)?.name}
-                    {groupDialogUnit.subject && groupDialogUnit.subject !== "רגיל"
-                      ? ` / ${groupDialogUnit.subject}`
-                      : ""}
-                  </strong>
-                </p>
-
-                <p>סה״כ שעות ביחידה: {groupDialogUnit.hours}</p>
-
-                <label className="dialog-field">
-                  מספר שעות לשיוך:
-                  <input
-                    type="number"
-                    min="1"
-                    max={groupDialogUnit.hours}
-                    value={groupDialogHours}
-                    onChange={(e) => setGroupDialogHours(e.target.value)}
-                  />
-                </label>
-
-                <label className="dialog-field">
-                  מקצוע / תיאור:
-                  <input
-                    type="text"
-                    placeholder="לדוגמה: אנגלית"
-                    value={groupDialogSubject}
-                    onChange={(e) => setGroupDialogSubject(e.target.value)}
-                  />
-                </label>
-
+              {constraintGroups.map((group) => (
                 <button
-                  className="group-option no-group"
+                  key={group.id}
+                  className="group-option"
                   onClick={() =>
                     splitUnitAndAssignGroup(
                       groupDialogUnit.id,
-                      null,
+                      group.id,
                       groupDialogHours,
                       groupDialogSubject
                     )
                   }
                 >
-                  ללא קבוצה
+                  <span
+                    className="constraint-color"
+                    style={{ backgroundColor: group.color }}
+                  />
+                  {group.name} —{" "}
+                  {(group.rules || [group.type])
+                    .map((rule) => {
+                      if (rule === "sameTime") return "חייב באותו טור";
+                      if (rule === "notSameTime") return "אסור באותו טור";
+                      if (rule === "notSameDaySameClass") return "אסור באותה שורה";
+                      return rule;
+                    })
+                    .join(" + ")}
                 </button>
+              ))}
 
-                {constraintGroups.map((group) => (
-                  <button
-                    key={group.id}
-                    className="group-option"
-                    onClick={() =>
-                      splitUnitAndAssignGroup(
-                        groupDialogUnit.id,
-                        group.id,
-                        groupDialogHours,
-                        groupDialogSubject
-                      )
-                    }
-                  >
-                    <span
-                      className="constraint-color"
-                      style={{ backgroundColor: group.color }}
-                    />
-                    {group.name} —{" "}
-                    {(group.rules || [group.type])
-                      .map((rule) => {
-                        if (rule === "sameTime") return "חייב באותו טור";
-                        if (rule === "notSameTime") return "אסור באותו טור";
-                        if (rule === "notSameDaySameClass") return "אסור באותה שורה";
-                        return rule;
-                      })
-                      .join(" + ")}
-                  </button>
-                ))}
-
-                <button className="dialog-cancel" onClick={() => setGroupDialogUnit(null)}>
-                  ביטול
-                </button>
+              <button className="dialog-cancel" onClick={() => setGroupDialogUnit(null)}>
+                ביטול
+              </button>
 
 
-              </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {showConstraintGroupDialog && (
-            <ConstraintGroupDialog
-              group={editingConstraintGroup}
-              onSave={saveConstraintGroup}
-              onCancel={() => {
-                setEditingConstraintGroup(null);
-                setShowConstraintGroupDialog(false);
-              }}
-            />
-          )}
-        </div>
-
-        <p className="hint">
-          Delete מוחק תא מסומן. גרירה למחסן מוחקת שיבוץ. Ctrl + גרירה מתא לתא
-          מבצע החלפה.
-        </p>
+        {showConstraintGroupDialog && (
+          <ConstraintGroupDialog
+            group={editingConstraintGroup}
+            onSave={saveConstraintGroup}
+            onCancel={() => {
+              setEditingConstraintGroup(null);
+              setShowConstraintGroupDialog(false);
+            }}
+          />
+        )}
       </div>
-    </DndContext>
+
+
+    </DndContext >
   );
 }

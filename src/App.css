@@ -580,3 +580,72 @@ th {
 .shahaf-cell div {
   line-height: 1.3;
 }
+
+.view-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.view-tabs button {
+  border: 1px solid #ccc;
+  background: white;
+  padding: 8px 16px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.active-tab {
+  background: #1976d2 !important;
+  color: white;
+  border-color: #1976d2 !important;
+}
+
+.teacher-view {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 14px;
+}
+
+.teacher-view-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 10px;
+}
+
+.teacher-view-header h3 {
+  margin: 0;
+}
+
+.teacher-view-header select {
+  margin-right: 6px;
+  padding: 5px;
+}
+
+.teacher-view-table {
+  border-collapse: collapse;
+  width: max-content;
+  background: white;
+}
+
+.teacher-view-table th,
+.teacher-view-table td {
+  border: 1px solid #999;
+  min-width: 110px;
+  height: 34px;
+  padding: 4px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.teacher-view-hour {
+  font-weight: bold;
+  background: #f0f0f0;
+}
+
+.teacher-view-cell div {
+  line-height: 1.3;
+}
