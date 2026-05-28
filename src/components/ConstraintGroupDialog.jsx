@@ -1,3 +1,4 @@
+import { useState } from "react";
 export default function ConstraintGroupDialog({
     group,
     onSave,
@@ -12,6 +13,37 @@ export default function ConstraintGroupDialog({
         rules: [],
     };
 
+    const [selectedRules, setSelectedRules] = useState(
+        defaultGroup.rules || []
+    );
+
+    function toggleRule(rule) {
+        if (selectedRules.includes(rule)) {
+            setSelectedRules(
+                selectedRules.filter((r) => r !== rule)
+            );
+            return;
+        }
+
+        let nextRules = [...selectedRules];
+
+        if (rule === "sameTime") {
+            nextRules = nextRules.filter(
+                (r) => r !== "notSameTime"
+            );
+        }
+
+        if (rule === "notSameTime") {
+            nextRules = nextRules.filter(
+                (r) => r !== "sameTime"
+            );
+        }
+
+        nextRules.push(rule);
+
+        setSelectedRules(nextRules);
+    }
+
     function handleSubmit(event) {
         event.preventDefault();
 
@@ -19,7 +51,7 @@ export default function ConstraintGroupDialog({
 
         const name = formData.get("name").trim();
         const color = formData.get("color");
-        const rules = formData.getAll("rules");
+        const rules = selectedRules;
 
         if (!name) {
             alert("יש להזין שם קבוצה");
@@ -60,9 +92,8 @@ export default function ConstraintGroupDialog({
                     <label>
                         <input
                             type="checkbox"
-                            name="rules"
-                            value="sameTime"
-                            defaultChecked={defaultGroup.rules?.includes("sameTime")}
+                            checked={selectedRules.includes("sameTime")}
+                            onChange={() => toggleRule("sameTime")}
                         />
                         חייב באותו טור
                     </label>
@@ -70,9 +101,8 @@ export default function ConstraintGroupDialog({
                     <label>
                         <input
                             type="checkbox"
-                            name="rules"
-                            value="notSameTime"
-                            defaultChecked={defaultGroup.rules?.includes("notSameTime")}
+                            checked={selectedRules.includes("notSameTime")}
+                            onChange={() => toggleRule("notSameTime")}
                         />
                         אסור באותו טור
                     </label>
@@ -80,9 +110,8 @@ export default function ConstraintGroupDialog({
                     <label>
                         <input
                             type="checkbox"
-                            name="rules"
-                            value="notSameDaySameClass"
-                            defaultChecked={defaultGroup.rules?.includes("notSameDaySameClass")}
+                            checked={selectedRules.includes("notSameDaySameClass")}
+                            onChange={() => toggleRule("notSameDaySameClass")}
                         />
                         אסור באותה שורה
                     </label>
