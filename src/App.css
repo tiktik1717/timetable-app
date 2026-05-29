@@ -835,3 +835,22 @@ th {
   text-align: center;
   padding: 4px;
 }
+
+.sadin-editor {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.sadin-table input,
+.sadin-table select {
+  padding: 5px;
+  min-width: 140px;
+}
+
+.small-number-input {
+  width: 70px;
+  min-width: 70px !important;
+  text-align: center;
+}

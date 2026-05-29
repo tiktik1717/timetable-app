@@ -30,6 +30,7 @@ import TeachersManager from "./components/TeachersManager";
 import ClassesManager from "./components/ClassesManager";
 import MeetingsManager from "./components/MeetingsManager";
 import DailyHoursManager from "./components/DailyHoursManager";
+import SadinSheetEditor from "./components/SadinSheetEditor";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -215,6 +216,145 @@ export default function App() {
       ...schoolData,
       dailyHoursByClass: result,
     };
+  }
+
+  function buildTeachingUnitsFromSheetRows(sheetRows) {
+    const mergedMap = new Map();
+
+    for (const row of sheetRows) {
+      if (!row.teacherId || !row.className || Number(row.hours) <= 0) continue;
+
+      const key = `${row.className}|${row.teacherId}`;
+
+      if (!mergedMap.has(key)) {
+        mergedMap.set(key, {
+          className: row.className,
+          teacherId: row.teacherId,
+          subject: "רגיל",
+          hours: 0,
+          constraintGroupId: null,
+        });
+      }
+
+      mergedMap.get(key).hours += Number(row.hours) || 0;
+    }
+
+    return [...mergedMap.values()].map((row, index) => ({
+      id: `base-${row.className}-${row.teacherId}-${index}`,
+      ...row,
+    }));
+  }
+
+  function buildTeachingLoadsFromUnits(units, classes) {
+    const teachingLoads = {};
+
+    for (const className of classes) {
+      teachingLoads[className] = {};
+    }
+
+    for (const unit of units) {
+      if (!teachingLoads[unit.className]) {
+        teachingLoads[unit.className] = {};
+      }
+
+      teachingLoads[unit.className][unit.teacherId] =
+        (teachingLoads[unit.className][unit.teacherId] || 0) + unit.hours;
+    }
+
+    return teachingLoads;
+  }
+
+  function countUnitScheduled(unitId, scheduleObject) {
+    let count = 0;
+
+    for (const day of days) {
+      for (const className of classes) {
+        for (const hour of hours) {
+          const value = scheduleObject[day]?.[className]?.[hour];
+          const unitIds = Array.isArray(value) ? value : value ? [value] : [];
+
+          if (unitIds.includes(unitId)) {
+            count++;
+          }
+        }
+      }
+    }
+
+    return count;
+  }
+
+  function trimScheduleToUnitHours(nextUnits) {
+    let removedCount = 0;
+
+    setSchedule((prevSchedule) => {
+      const nextSchedule = structuredClone(prevSchedule);
+
+      for (const unit of nextUnits) {
+        let scheduledCount = countUnitScheduled(unit.id, nextSchedule);
+
+        while (scheduledCount > unit.hours) {
+          let removed = false;
+
+          for (const day of days) {
+            for (const className of classes) {
+              for (const hour of hours) {
+                const currentUnitIds = getCellUnitIdsFromSchedule(
+                  nextSchedule,
+                  day,
+                  className,
+                  hour
+                );
+
+                if (currentUnitIds.includes(unit.id)) {
+                  const nextUnitIds = currentUnitIds.filter(
+                    (id, index) =>
+                      id !== unit.id || index !== currentUnitIds.indexOf(unit.id)
+                  );
+
+                  setCellUnitIds(
+                    nextSchedule,
+                    day,
+                    className,
+                    hour,
+                    nextUnitIds
+                  );
+
+                  scheduledCount--;
+                  removedCount++;
+                  removed = true;
+                  break;
+                }
+              }
+
+              if (removed) break;
+            }
+
+            if (removed) break;
+          }
+        }
+      }
+
+      return nextSchedule;
+    });
+
+    if (removedCount > 0) {
+      alert(`בעקבות הפחתת שעות הוסרו ${removedCount} שיבוצים קיימים.`);
+    }
+  }
+
+  function updateSadinRows(nextRows) {
+    const nextUnits = buildTeachingUnitsFromSheetRows(nextRows);
+    const nextTeachingLoads = buildTeachingLoadsFromUnits(nextUnits, classes);
+
+    setSchoolData((prev) => ({
+      ...prev,
+      sheetRows: nextRows,
+      rawSubjectRows: nextRows,
+      teachingUnits: nextUnits,
+      teachingLoads: nextTeachingLoads,
+    }));
+
+    trimScheduleToUnitHours(nextUnits);
   }
 
   function getVisibleHoursForSelectedDay() {
@@ -1478,6 +1618,13 @@ export default function App() {
           </button>
 
           <button
+            className={activeView === "sadin" ? "active-tab" : ""}
+            onClick={() => setActiveView("sadin")}
+          >
+            גליון סדין
+          </button>
+
+          <button
             className={activeView === "meetings" ? "active-tab" : ""}
             onClick={() => setActiveView("meetings")}
           >
@@ -1816,6 +1963,15 @@ export default function App() {
             days={days}
             dailyHoursByClass={dailyHoursByClass}
             setSchoolData={setSchoolData}
+          />
+        )}
+
+        {activeView === "sadin" && (
+          <SadinSheetEditor
+            sheetRows={schoolData.sheetRows || []}
+            teachers={teachers}
+            classes={classes}
+            onUpdateRows={updateSadinRows}
           />
         )}
 

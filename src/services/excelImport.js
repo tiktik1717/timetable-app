@@ -123,7 +123,7 @@ export function buildDataFromRawSadin(importedExcel) {
     }
 
     const teachers = parseTeachersSheet(teachersSheet);
-    const classesData = parseClassesSheet(classesSheet, teachers);  
+    const classesData = parseClassesSheet(classesSheet, teachers);
     const sheetRows = parseSummaryByTeacherSheet(summarySheet, teachers, classesData.classes);
 
     const mergedRowsMap = new Map();
@@ -186,7 +186,8 @@ export function buildDataFromRawSadin(importedExcel) {
         days: ["א", "ב", "ג", "ד", "ה", "ו"],
         teachingLoads,
         teachingUnits,
-        sheetRows: mergedRows,
+        sheetRows,
+        rawSubjectRows: sheetRows,
         constraintGroups: [],
         meetings: [],
         homeroomTeacherColor: "#c8e6c9",
