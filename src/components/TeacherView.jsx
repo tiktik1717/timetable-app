@@ -2,16 +2,18 @@ export default function TeacherView({
     teachers,
     classes,
     days,
-    hours,
     selectedTeacherForView,
     setSelectedTeacherForView,
     getCellUnitIds,
     getUnitById,
+    getClassHoursForDay,
 }) {
     function getTeacherLessons(day, hour) {
         const lessons = [];
 
         for (const className of classes) {
+            if (hour > getClassHoursForDay(className, day)) continue;
+
             const unitIds = getCellUnitIds(day, className, hour);
 
             for (const unitId of unitIds) {
@@ -29,6 +31,18 @@ export default function TeacherView({
 
         return lessons;
     }
+
+    const maxHoursForAllClasses = Math.max(
+        0,
+        ...days.map((day) =>
+            Math.max(0, ...classes.map((className) => getClassHoursForDay(className, day)))
+        )
+    );
+
+    const visibleHours = Array.from(
+        { length: maxHoursForAllClasses },
+        (_, index) => index + 1
+    );
 
     return (
         <div className="teacher-view">
@@ -61,7 +75,7 @@ export default function TeacherView({
                 </thead>
 
                 <tbody>
-                    {hours.map((hour) => (
+                    {visibleHours.map((hour) => (
                         <tr key={hour}>
                             <td className="teacher-view-hour">שעה {hour}</td>
 

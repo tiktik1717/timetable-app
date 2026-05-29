@@ -13,11 +13,13 @@ export default function DroppableCell({
   displayMode,
   onClick,
   highlightedUnitIds,
+  blocked,
 }) {
   const cellId = `${className}-${hour}`;
 
   const { setNodeRef: setDroppableRef } = useDroppable({
     id: cellId,
+    disabled: blocked,
   });
 
   const firstUnit = units[0];
@@ -35,7 +37,7 @@ export default function DroppableCell({
       fromHour: String(hour),
       unitIds: units.map((unit) => unit.id),
     },
-    disabled: units.length === 0,
+    disabled: blocked || units.length === 0,
   });
 
   const teacherStyle = {
@@ -53,10 +55,11 @@ export default function DroppableCell({
         hasConflict ? "conflict" : "",
         selected ? "selected-cell" : "",
         highlighted ? "highlighted-cell" : "",
+        blocked ? "blocked-cell" : "",
       ].join(" ")}
       onMouseDown={onClick}
     >
-      {units.length > 0 && (
+      {!blocked && units.length > 0 && (
         <div
           ref={setDraggableRef}
           style={teacherStyle}

@@ -1,13 +1,23 @@
 export default function ShahafView({
     classes,
     days,
-    hours,
     selectedClassForShahaf,
     setSelectedClassForShahaf,
     getCellUnitIds,
     getUnitById,
     getTeacherById,
+    getClassHoursForDay,
 }) {
+    const maxHoursForClass = Math.max(
+        0,
+        ...days.map((day) => getClassHoursForDay(selectedClassForShahaf, day))
+    );
+
+    const visibleHours = Array.from(
+        { length: maxHoursForClass },
+        (_, index) => index + 1
+    );
+
     return (
         <div className="shahaf-view">
             <div className="shahaf-header">
@@ -39,11 +49,18 @@ export default function ShahafView({
                 </thead>
 
                 <tbody>
-                    {hours.map((hour) => (
+                    {visibleHours.map((hour) => (
                         <tr key={hour}>
                             <td className="shahaf-hour">שעה {hour}</td>
 
                             {days.map((day) => {
+                                const isBlocked =
+                                    hour > getClassHoursForDay(selectedClassForShahaf, day);
+
+                                if (isBlocked) {
+                                    return <td key={day} className="blocked-cell"></td>;
+                                }
+
                                 const unitIds = getCellUnitIds(
                                     day,
                                     selectedClassForShahaf,
@@ -58,11 +75,9 @@ export default function ShahafView({
 
                                 return (
                                     <td key={day} className="shahaf-cell">
-                                        {teachers.length === 0
-                                            ? ""
-                                            : teachers.map((teacherName, index) => (
-                                                <div key={index}>{teacherName}</div>
-                                            ))}
+                                        {teachers.map((teacherName, index) => (
+                                            <div key={index}>{teacherName}</div>
+                                        ))}
                                     </td>
                                 );
                             })}

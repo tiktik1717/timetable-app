@@ -29,7 +29,7 @@ import TeacherView from "./components/TeacherView";
 import TeachersManager from "./components/TeachersManager";
 import ClassesManager from "./components/ClassesManager";
 import MeetingsManager from "./components/MeetingsManager";
-
+import DailyHoursManager from "./components/DailyHoursManager";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -81,16 +81,21 @@ export default function App() {
       constraintGroups: mockConstraintGroups,
       homeroomTeacherColor: "#c8e6c9",
       meetings: [],
+      dailyHoursByClass: createDefaultDailyHours(
+        mockClasses,
+        mockDays,
+        6
+      ),
     };
 
     const savedSchoolData =
       localStorage.getItem("schoolData");
 
     if (savedSchoolData) {
-      return {
+      return ensureDailyHoursForClasses({
         ...defaultData,
         ...JSON.parse(savedSchoolData),
-      };
+      });
     }
 
     return defaultData;
@@ -105,6 +110,7 @@ export default function App() {
     teachingUnits = [],
     constraintGroups = [],
     meetings = [],
+    dailyHoursByClass = {},
   } = schoolData;
 
   const [selectedClassForShahaf, setSelectedClassForShahaf] = useState(
@@ -113,6 +119,21 @@ export default function App() {
   const [selectedTeacherForView, setSelectedTeacherForView] = useState(
     teachers[0]?.id || ""
   );
+
+
+  function createDefaultDailyHours(classes, days, defaultHours = 6) {
+    const result = {};
+
+    for (const className of classes) {
+      result[className] = {};
+
+      for (const day of days) {
+        result[className][day] = defaultHours;
+      }
+    }
+
+    return result;
+  }
 
   const scheduleRef = useRef(schedule);
   const historyRef = useRef(history);
@@ -157,6 +178,53 @@ export default function App() {
     setSchedule(nextSchedule);
     setHistory(newHistory);
     setFuture(newFuture);
+  }
+
+  function getClassHoursForDay(className, day) {
+    return Number(dailyHoursByClass?.[className]?.[day]) || 0;
+  }
+
+  function getMaxHoursForDay(day) {
+    return Math.max(
+      0,
+      ...classes.map((className) =>
+        shouldShowClassInSelectedDay(className)
+          ? getClassHoursForDay(className, day)
+          : 0
+      )
+    );
+  }
+
+  function ensureDailyHoursForClasses(schoolData) {
+    const existing = schoolData.dailyHoursByClass || {};
+    const result = { ...existing };
+
+    for (const className of schoolData.classes || []) {
+      if (!result[className]) {
+        result[className] = {};
+      }
+
+      for (const day of schoolData.days || []) {
+        if (result[className][day] === undefined) {
+          result[className][day] = 6;
+        }
+      }
+    }
+
+    return {
+      ...schoolData,
+      dailyHoursByClass: result,
+    };
+  }
+
+  function getVisibleHoursForSelectedDay() {
+    const maxHours = getMaxHoursForDay(selectedDay);
+
+    return Array.from({ length: maxHours }, (_, index) => index + 1);
+  }
+
+  function isBlockedCell(className, day, hour) {
+    return Number(hour) > getClassHoursForDay(className, day);
   }
 
   function splitUnitAndAssignGroup(unitId, groupId, hoursToAssign, subject) {
@@ -1176,7 +1244,10 @@ export default function App() {
     }
 
     const [toClass, toHour] = over.id.split("-");
-
+    if (isBlockedCell(toClass, selectedDay, toHour)) {
+      alert("לא ניתן לשבץ בשעה שאינה קיימת בכיתה זו ביום זה");
+      return;
+    }
     if (data?.source === "cell") {
       const draggedUnitIds = singleDragUnitId
         ? [singleDragUnitId]
@@ -1288,11 +1359,10 @@ export default function App() {
       console.log("Parsed school data:", parsedData);
 
       setImportedExcel(result);
-      setSchoolData(parsedData);
-      localStorage.setItem(
-        "schoolData",
-        JSON.stringify(parsedData)
-      );
+      const normalizedData = ensureDailyHoursForClasses(parsedData);
+
+      setSchoolData(normalizedData);
+      localStorage.setItem("schoolData", JSON.stringify(normalizedData));
       setSchedule({});
       setHistory([]);
       setFuture([]);
@@ -1308,7 +1378,7 @@ export default function App() {
   }
 
   const warnings = getWarnings();
-
+  const visibleHours = getVisibleHoursForSelectedDay();
 
   return (
 
@@ -1398,6 +1468,13 @@ export default function App() {
             onClick={() => setActiveView("classes")}
           >
             ניהול כיתות
+          </button>
+
+          <button
+            className={activeView === "dailyHours" ? "active-tab" : ""}
+            onClick={() => setActiveView("dailyHours")}
+          >
+            שעות יומיות
           </button>
 
           <button
@@ -1535,15 +1612,14 @@ export default function App() {
                   <tr>
                     <th>מחסן שעות</th>
                     <th>כיתה</th>
-                    {hours.map((hour) => (
-                      <th
-                        key={hour}
-                        className={
-                          hoveredCell?.hour === String(hour) ? "highlighted-header" : ""
-                        }
-                      >
-                        שעה {hour}
-                      </th>))}
+                    {visibleHours.map((hour) => (<th
+                      key={hour}
+                      className={
+                        hoveredCell?.hour === String(hour) ? "highlighted-header" : ""
+                      }
+                    >
+                      שעה {hour}
+                    </th>))}
                   </tr>
                 </thead>
 
@@ -1599,7 +1675,7 @@ export default function App() {
                           {className}
                         </td>
 
-                        {hours.map((hour) => {
+                        {visibleHours.map((hour) => {
                           const unitIds = getCellUnitIds(selectedDay, className, hour);
                           const units = unitIds.map(getUnitById).filter(Boolean);
 
@@ -1638,6 +1714,8 @@ export default function App() {
                               .map((unit) => unit.id)
                           );
 
+                          const blocked = isBlockedCell(className, selectedDay, hour);
+
                           return (
                             <DroppableCell
                               key={hour}
@@ -1649,6 +1727,7 @@ export default function App() {
                               conflictingTeacherIds={conflictingTeacherIds}
                               highlightedUnitIds={highlightedUnitIds}
                               selected={selected}
+                              blocked={blocked}
                               highlighted={highlighted}
                               displayMode={displayMode}
                               onClick={() => {
@@ -1688,6 +1767,8 @@ export default function App() {
             getCellUnitIds={getCellUnitIds}
             getUnitById={getUnitById}
             getTeacherById={getTeacherById}
+            dailyHoursByClass={dailyHoursByClass}
+            getClassHoursForDay={getClassHoursForDay}
           />
         )}
 
@@ -1701,6 +1782,7 @@ export default function App() {
             setSelectedTeacherForView={setSelectedTeacherForView}
             getCellUnitIds={getCellUnitIds}
             getUnitById={getUnitById}
+            getClassHoursForDay={getClassHoursForDay}
           />
         )}
 
@@ -1724,6 +1806,15 @@ export default function App() {
           <MeetingsManager
             teachers={teachers}
             meetings={meetings}
+            setSchoolData={setSchoolData}
+          />
+        )}
+
+        {activeView === "dailyHours" && (
+          <DailyHoursManager
+            classes={classes}
+            days={days}
+            dailyHoursByClass={dailyHoursByClass}
             setSchoolData={setSchoolData}
           />
         )}

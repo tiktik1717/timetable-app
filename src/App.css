@@ -817,3 +817,21 @@ th {
   font-size: 13px;
   color: #555;
 }
+
+.blocked-cell {
+  background: #555 !important;
+  cursor: not-allowed;
+}
+
+.daily-hours-manager {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.daily-hours-input {
+  width: 48px;
+  text-align: center;
+  padding: 4px;
+}
