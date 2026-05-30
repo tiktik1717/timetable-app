@@ -442,7 +442,7 @@ export default function App() {
           const units = unitIds.map(getUnitById).filter(Boolean);
 
           for (const unit of units) {
-            if (hasTeacherConflict(className, hour, unit.teacherId)) {
+            if (hasTeacherConflict(className, hour, unit.teacherId, day)) {
               warnings.push({
                 type: "teacherConflict",
                 day,
@@ -453,7 +453,7 @@ export default function App() {
               });
             }
 
-            if (hasNotSameTimeConflict(className, hour, unit)) {
+            if (hasNotSameTimeConflict(className, hour, unit, day)) {
               warnings.push({
                 type: "notSameTime",
                 day,
@@ -464,7 +464,7 @@ export default function App() {
               });
             }
 
-            if (hasNotSameDaySameClassConflict(className, hour, unit)) {
+            if (hasNotSameDaySameClassConflict(className, hour, unit, day)) {
               warnings.push({
                 type: "notSameDaySameClass",
                 day,
@@ -753,8 +753,8 @@ export default function App() {
     return placements;
   }
 
-  function hasTeacherConflict(currentClass, hour, teacherId) {
-    const currentUnitIds = getCellUnitIds(selectedDay, currentClass, hour);
+  function hasTeacherConflict(currentClass, hour, teacherId, day = selectedDay) {
+    const currentUnitIds = getCellUnitIds(day, currentClass, hour);
     const currentUnits = currentUnitIds
       .map(getUnitById)
       .filter((unit) => unit?.teacherId === teacherId);
@@ -762,7 +762,7 @@ export default function App() {
     for (const className of classes) {
       if (className === currentClass) continue;
 
-      const otherUnitIds = getCellUnitIds(selectedDay, className, hour);
+      const otherUnitIds = getCellUnitIds(day, className, hour);
       const otherUnits = otherUnitIds
         .map(getUnitById)
         .filter((unit) => unit?.teacherId === teacherId);
@@ -788,7 +788,7 @@ export default function App() {
     return false;
   }
 
-  function hasNotSameDaySameClassConflict(currentClass, currentHour, unit) {
+  function hasNotSameDaySameClassConflict(currentClass, currentHour, unit, day = selectedDay) {
     const group = getConstraintGroupById(unit.constraintGroupId);
 
     if (!groupHasRule(group, "notSameDaySameClass")) {
@@ -798,7 +798,7 @@ export default function App() {
     for (const hour of hours) {
       if (String(hour) === String(currentHour)) continue;
 
-      const unitIds = getCellUnitIds(selectedDay, currentClass, hour);
+      const unitIds = getCellUnitIds(day, currentClass, hour);
 
       const hasSameGroup = unitIds.some((unitId) => {
         const otherUnit = getUnitById(unitId);
@@ -817,7 +817,7 @@ export default function App() {
     return false;
   }
 
-  function hasNotSameTimeConflict(currentClass, currentHour, unit) {
+  function hasNotSameTimeConflict(currentClass, currentHour, unit, day = selectedDay) {
     const group = getConstraintGroupById(unit.constraintGroupId);
 
     if (!groupHasRule(group, "notSameTime")) {
@@ -827,7 +827,7 @@ export default function App() {
     for (const className of classes) {
       if (className === currentClass) continue;
 
-      const unitIds = getCellUnitIds(selectedDay, className, currentHour);
+      const unitIds = getCellUnitIds(day, className, currentHour);
 
       const hasSameGroup = unitIds.some((unitId) => {
         const otherUnit = getUnitById(unitId);
@@ -1747,8 +1747,8 @@ export default function App() {
               onHighlightGroup={setHighlightedGroupId}
             />
 
-            <WarningsPanel warnings={warnings} />
-
+            <WarningsPanel warnings={warnings} selectedDay={selectedDay} />
+            
             <div
               className="table-scroll-wrapper"
               ref={tableScrollRef}

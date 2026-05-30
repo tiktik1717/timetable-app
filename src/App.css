@@ -854,3 +854,8 @@ th {
   min-width: 70px !important;
   text-align: center;
 }
+
+.warnings-divider {
+  color: #999;
+  font-weight: bold;
+}
