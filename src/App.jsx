@@ -73,6 +73,16 @@ export default function App() {
   const [showConstraintGroupDialog, setShowConstraintGroupDialog] = useState(false);
   const [editingConstraintGroup, setEditingConstraintGroup] = useState(null);
   const [activeView, setActiveView] = useState("scheduler");
+
+  const [isFocusMode, setIsFocusMode] = useState(false);
+  const [showPanelsMenu, setShowPanelsMenu] = useState(false);
+
+  const [visiblePanels, setVisiblePanels] = useState({
+    groups: true,
+    warnings: true,
+    highlights: true,
+  });
+
   const [teacherHighlights, setTeacherHighlights] = useState(() => {
     const saved = localStorage.getItem("teacherHighlights");
 
@@ -191,6 +201,13 @@ export default function App() {
     setFuture(newFuture);
   }
 
+  function togglePanel(panelName) {
+    setVisiblePanels((prev) => ({
+      ...prev,
+      [panelName]: !prev[panelName],
+    }));
+  }
+
   function redo() {
     const currentFuture = futureRef.current;
 
@@ -203,6 +220,78 @@ export default function App() {
     setSchedule(nextSchedule);
     setHistory(newHistory);
     setFuture(newFuture);
+  }
+
+  function saveProjectToFile() {
+    const projectData = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      schoolData,
+      schedule,
+      teacherHighlights,
+    };
+
+    const json = JSON.stringify(projectData, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `school-timetable-${new Date()
+      .toISOString()
+      .slice(0, 10)}.json`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+  }
+
+  async function loadProjectFromFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const projectData = JSON.parse(text);
+
+      if (!projectData.schoolData || !projectData.schedule) {
+        throw new Error("קובץ הפרויקט אינו תקין");
+      }
+
+      const normalizedSchoolData = ensureDailyHoursForClasses(
+        projectData.schoolData
+      );
+
+      setSchoolData(normalizedSchoolData);
+      setSchedule(projectData.schedule || {});
+      setTeacherHighlights(
+        projectData.teacherHighlights || createDefaultTeacherHighlights()
+      );
+
+      setHistory([]);
+      setFuture([]);
+
+      localStorage.setItem("schoolData", JSON.stringify(normalizedSchoolData));
+      localStorage.setItem(
+        "schoolSchedule",
+        JSON.stringify(projectData.schedule || {})
+      );
+      localStorage.setItem(
+        "teacherHighlights",
+        JSON.stringify(
+          projectData.teacherHighlights || createDefaultTeacherHighlights()
+        )
+      );
+
+      alert("הפרויקט נטען בהצלחה");
+    } catch (error) {
+      console.error(error);
+      alert("טעינת הפרויקט נכשלה: " + error.message);
+    } finally {
+      event.target.value = "";
+    }
   }
 
   function getTeacherHighlight(teacher) {
@@ -1623,64 +1712,65 @@ export default function App() {
     >
 
 
-      <div className="container">
-        <h1>מערכת שעות - אב טיפוס</h1>
+      <div className={isFocusMode ? "container focus-mode" : "container"}>
+        {!isFocusMode && <h1>מערכת שעות - אב טיפוס</h1>}
+        {!isFocusMode && (
+          <div className="view-tabs">
+            <button
+              className={activeView === "scheduler" ? "active-tab" : ""}
+              onClick={() => setActiveView("scheduler")}
+            >
+              בונה מערכת
+            </button>
 
-        <div className="view-tabs">
-          <button
-            className={activeView === "scheduler" ? "active-tab" : ""}
-            onClick={() => setActiveView("scheduler")}
-          >
-            בונה מערכת
-          </button>
+            <button
+              className={activeView === "shahaf" ? "active-tab" : ""}
+              onClick={() => setActiveView("shahaf")}
+            >
+              תצוגת כיתות
+            </button>
+            <button
+              className={activeView === "teacher" ? "active-tab" : ""}
+              onClick={() => setActiveView("teacher")}
+            >
+              תצוגת מורה
+            </button>
+            <button
+              className={activeView === "teachers" ? "active-tab" : ""}
+              onClick={() => setActiveView("teachers")}
+            >
+              ניהול מורים
+            </button>
+            <button
+              className={activeView === "classes" ? "active-tab" : ""}
+              onClick={() => setActiveView("classes")}
+            >
+              ניהול כיתות
+            </button>
 
-          <button
-            className={activeView === "shahaf" ? "active-tab" : ""}
-            onClick={() => setActiveView("shahaf")}
-          >
-            תצוגת כיתות
-          </button>
-          <button
-            className={activeView === "teacher" ? "active-tab" : ""}
-            onClick={() => setActiveView("teacher")}
-          >
-            תצוגת מורה
-          </button>
-          <button
-            className={activeView === "teachers" ? "active-tab" : ""}
-            onClick={() => setActiveView("teachers")}
-          >
-            ניהול מורים
-          </button>
-          <button
-            className={activeView === "classes" ? "active-tab" : ""}
-            onClick={() => setActiveView("classes")}
-          >
-            ניהול כיתות
-          </button>
+            <button
+              className={activeView === "dailyHours" ? "active-tab" : ""}
+              onClick={() => setActiveView("dailyHours")}
+            >
+              שעות יומיות
+            </button>
 
-          <button
-            className={activeView === "dailyHours" ? "active-tab" : ""}
-            onClick={() => setActiveView("dailyHours")}
-          >
-            שעות יומיות
-          </button>
+            <button
+              className={activeView === "sadin" ? "active-tab" : ""}
+              onClick={() => setActiveView("sadin")}
+            >
+              גליון סדין
+            </button>
 
-          <button
-            className={activeView === "sadin" ? "active-tab" : ""}
-            onClick={() => setActiveView("sadin")}
-          >
-            גליון סדין
-          </button>
+            <button
+              className={activeView === "meetings" ? "active-tab" : ""}
+              onClick={() => setActiveView("meetings")}
+            >
+              ישיבות צוות
+            </button>
 
-          <button
-            className={activeView === "meetings" ? "active-tab" : ""}
-            onClick={() => setActiveView("meetings")}
-          >
-            ישיבות צוות
-          </button>
-        </div>
-
+          </div>
+        )}
         {activeView === "scheduler" && (
           <>
             <div className="top-bar">
@@ -1729,79 +1819,168 @@ export default function App() {
               >
                 בצע שוב
               </button>
+              {!isFocusMode && (
+                <>
 
+                  <button
+                    className="clear-button"
+                    onClick={() => {
+                      if (confirm("האם למחוק את כל השיבוצים?")) {
+                        setSchedule({});
+                        setHistory([]);
+                        setFuture([]);
+                        localStorage.removeItem("schoolSchedule");
+                      }
+                      setSchoolData((prev) => {
+                        const cleanedSchoolData = {
+                          ...prev,
+                          teachingUnits: prev.teachingUnits.map((unit) => ({
+                            ...unit,
+                            constraintGroupId: null,
+                            color: null,
+                          })),
+                        };
+
+                        localStorage.setItem(
+                          "schoolData",
+                          JSON.stringify(cleanedSchoolData)
+                        );
+
+                        return cleanedSchoolData;
+                      });
+                    }}
+                  >
+                    נקה מערכת
+                  </button>
+
+                  <label className="upload-button">
+                    ייבוא Excel
+                    <input
+                      type="file"
+                      accept=".xlsx,.xlsm,.xls"
+                      onChange={handleExcelUpload}
+                      hidden
+                    />
+                  </label>
+                </>
+              )}
               <button
-                className="clear-button"
-                onClick={() => {
-                  if (confirm("האם למחוק את כל השיבוצים?")) {
-                    setSchedule({});
-                    setHistory([]);
-                    setFuture([]);
-                    localStorage.removeItem("schoolSchedule");
-                  }
-                  setSchoolData((prev) => {
-                    const cleanedSchoolData = {
-                      ...prev,
-                      teachingUnits: prev.teachingUnits.map((unit) => ({
-                        ...unit,
-                        constraintGroupId: null,
-                        color: null,
-                      })),
-                    };
-
-                    localStorage.setItem(
-                      "schoolData",
-                      JSON.stringify(cleanedSchoolData)
-                    );
-
-                    return cleanedSchoolData;
-                  });
-                }}
+                type="button"
+                className="action-button"
+                onClick={saveProjectToFile}
               >
-                נקה מערכת
+                שמור פרויקט
               </button>
 
               <label className="upload-button">
-                ייבוא Excel
+                טען פרויקט
                 <input
                   type="file"
-                  accept=".xlsx,.xlsm,.xls"
-                  onChange={handleExcelUpload}
+                  accept=".json"
+                  onChange={loadProjectFromFile}
                   hidden
                 />
               </label>
+              <div className="panels-menu-wrapper">
+                <button
+                  className="action-button"
+                  onClick={() => setShowPanelsMenu((prev) => !prev)}
+                >
+                  תצוגה ▾
+                </button>
 
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={showFreeDayTeachers}
-                  onChange={(e) => setShowFreeDayTeachers(e.target.checked)}
-                />
-                הצג מורים ביום חופשי
-              </label>
+                {showPanelsMenu && (
+                  <div className="panels-menu">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={visiblePanels.groups}
+                        onChange={() => togglePanel("groups")}
+                      />
+                      קבוצות שיבוץ
+                    </label>
+
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={visiblePanels.warnings}
+                        onChange={() => togglePanel("warnings")}
+                      />
+                      מרכז אזהרות
+                    </label>
+
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={visiblePanels.highlights}
+                        onChange={() => togglePanel("highlights")}
+                      />
+                      הדגשת מורים
+                    </label>
+
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={showFreeDayTeachers}
+                        onChange={(e) => setShowFreeDayTeachers(e.target.checked)}
+                      />
+                      הצג מורים ביום חופשי
+                    </label>
+                  </div>
+                )}
+
+              </div>
+
+              <button
+                className="action-button focus-toggle-button"
+                onClick={() => {
+                  setIsFocusMode((prev) => {
+                    const next = !prev;
+
+                    if (next) {
+                      setVisiblePanels({
+                        groups: false,
+                        warnings: false,
+                        highlights: false,
+                      });
+                    }
+
+                    return next;
+                  });
+                }}
+              >
+                {isFocusMode ? "צא ממסך שיבוץ מלא" : "מסך שיבוץ מלא"}
+              </button>
+
             </div>
 
-            <ConstraintGroupsPanel
-              constraintGroups={constraintGroups}
-              homeroomTeacherColor={schoolData.homeroomTeacherColor || "#c8e6c9"}
-              onCreateGroup={() => {
-                setEditingConstraintGroup(null);
-                setShowConstraintGroupDialog(true);
-              }}
-              onEditGroup={(group) => {
-                setEditingConstraintGroup(group);
-                setShowConstraintGroupDialog(true);
-              }}
-              onDeleteGroup={deleteConstraintGroup}
-              onHighlightGroup={setHighlightedGroupId}
-            />
+            {visiblePanels.groups && (
+              <ConstraintGroupsPanel
+                constraintGroups={constraintGroups}
+                homeroomTeacherColor={schoolData.homeroomTeacherColor || "#c8e6c9"}
+                onCreateGroup={() => {
+                  setEditingConstraintGroup(null);
+                  setShowConstraintGroupDialog(true);
+                }}
+                onEditGroup={(group) => {
+                  setEditingConstraintGroup(group);
+                  setShowConstraintGroupDialog(true);
+                }}
+                onDeleteGroup={deleteConstraintGroup}
+                onHighlightGroup={setHighlightedGroupId}
+              />
+            )}
 
-            <WarningsPanel warnings={warnings} selectedDay={selectedDay} />
+            {visiblePanels.warnings && (
+              <WarningsPanel warnings={warnings} selectedDay={selectedDay} />
+            )}
 
-            <TeacherHighlightPanel
-              teacherHighlights={teacherHighlights}
-              setTeacherHighlights={setTeacherHighlights}
-            />
+            {visiblePanels.highlights && (
+              <TeacherHighlightPanel
+                teacherHighlights={teacherHighlights}
+                setTeacherHighlights={setTeacherHighlights}
+              />
+            )}
 
             <div
               className="table-scroll-wrapper"

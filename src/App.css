@@ -905,3 +905,51 @@ th {
   border-style: solid !important;
   font-weight: 800 !important;
 }
+
+.panels-menu-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.panels-menu {
+  position: absolute;
+  top: 110%;
+  right: 0;
+  z-index: 10000;
+
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 8px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  min-width: 170px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}
+
+.panels-menu label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.focus-mode {
+  padding: 4px !important;
+}
+
+.focus-mode .top-bar {
+  margin-bottom: 6px;
+}
+
+.focus-mode .table-scroll-wrapper {
+  max-height: calc(100vh - 70px);
+}
+
+.focus-toggle-button {
+  margin-right: 8px;
+}
