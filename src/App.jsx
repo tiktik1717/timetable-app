@@ -57,6 +57,26 @@ export default function App() {
     localStorage.setItem("schoolSchedule", JSON.stringify(schedule));
   }, [schedule]);
 
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (
+        panelsMenuRef.current &&
+        !panelsMenuRef.current.contains(event.target)
+      ) {
+        setShowPanelsMenu(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const panelsMenuRef = useRef(null);
+
   const [selectedCell, setSelectedCell] = useState(null);
   const [ctrlPressed, setCtrlPressed] = useState(false);
   const [shiftPressed, setShiftPressed] = useState(false);
@@ -82,6 +102,7 @@ export default function App() {
     groups: true,
     warnings: true,
     highlights: true,
+    dailyBalance: true,
   });
 
   const [teacherHighlights, setTeacherHighlights] = useState(() => {
@@ -271,6 +292,27 @@ export default function App() {
 
       return cleanedSchoolData;
     });
+  }
+
+  function getRemainingHoursForClassInDay(className, day) {
+    let total = 0;
+
+    for (const unit of teachingUnits) {
+      if (unit.className !== className) continue;
+
+      total += getRemainingUnitHours(unit.id);
+    }
+
+    return total;
+  }
+
+  function getDailyBalanceStatus(className, day) {
+    const remaining = getRemainingHoursForClassInDay(className, day);
+    const classHours = getClassHoursForDay(className, day);
+
+    if (remaining > classHours) return "good";
+    if (remaining === classHours) return "warning";
+    return "danger";
   }
 
   async function loadProjectFromFile(event) {
@@ -1851,7 +1893,7 @@ export default function App() {
                 בצע שוב
               </button>
 
-              <div className="panels-menu-wrapper">
+              <div className="panels-menu-wrapper" ref={panelsMenuRef}>
                 <button
                   className="action-button"
                   onClick={() => setShowPanelsMenu((prev) => !prev)}
@@ -1896,6 +1938,14 @@ export default function App() {
                       />
                       הצג מורים ביום חופשי
                     </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={visiblePanels.dailyBalance}
+                        onChange={() => togglePanel("dailyBalance")}
+                      />
+                      יתרת יום
+                    </label>
                   </div>
                 )}
 
@@ -1912,6 +1962,7 @@ export default function App() {
                         groups: false,
                         warnings: false,
                         highlights: false,
+                        dailyBalance: false,
                       });
                     }
 
@@ -1961,6 +2012,7 @@ export default function App() {
                 <thead>
                   <tr>
                     <th>מחסן שעות</th>
+                    {visiblePanels.dailyBalance && <th>יתרת יום</th>}
                     <th>כיתה</th>
                     {visibleHours.map((hour) => (<th
                       key={hour}
@@ -2017,7 +2069,16 @@ export default function App() {
                             })
                           }
                         </LoadCell>
-
+                        {visiblePanels.dailyBalance && (
+                          <td
+                            className={[
+                              "daily-balance-cell",
+                              `daily-balance-${getDailyBalanceStatus(className, selectedDay)}`,
+                            ].join(" ")}
+                          >
+                            {getRemainingHoursForClassInDay(className, selectedDay)}
+                          </td>
+                        )}
                         <td
                           className={
                             hoveredCell?.className === className
@@ -2195,7 +2256,7 @@ export default function App() {
             clearProject={clearProject}
           />
         )}
-        
+
         {groupDialogUnit && (
           <div className="modal-backdrop" onClick={() => setGroupDialogUnit(null)}>
             <div className="group-dialog" onClick={(e) => e.stopPropagation()}>

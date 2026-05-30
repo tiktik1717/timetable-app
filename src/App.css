@@ -996,3 +996,22 @@ th {
 .danger-file-button {
   background: #d32f2f;
 }
+
+.daily-balance-cell {
+  width: 42px;
+  min-width: 42px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.daily-balance-good {
+  background: #c8e6c9;
+}
+
+.daily-balance-warning {
+  background: #fff59d;
+}
+
+.daily-balance-danger {
+  background: #ffcdd2;
+}
