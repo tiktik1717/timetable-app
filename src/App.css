@@ -270,7 +270,6 @@ th {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-weight: bold;
   white-space: nowrap;
 }
 
@@ -1014,4 +1013,15 @@ th {
 
 .daily-balance-danger {
   background: #ffcdd2;
+}
+
+.selected-load-item {
+  outline: 3px solid #000 !important;
+  outline-offset: 1px;
+}
+
+.help-list {
+  line-height: 1.7;
+  padding-right: 20px;
+  font-size: 14px;
 }

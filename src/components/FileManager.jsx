@@ -3,6 +3,7 @@ export default function FileManager({
     loadProjectFromFile,
     handleExcelUpload,
     clearProject,
+    showHelp,
 }) {
     return (
         <div className="file-manager">
@@ -35,6 +36,9 @@ export default function FileManager({
 
                 <button className="file-action-button danger-file-button" onClick={clearProject}>
                     נקה מערכת
+                </button>
+                <button className="file-action-button" onClick={showHelp}>
+                    עזרה וקיצורי מקלדת
                 </button>
             </div>
         </div>

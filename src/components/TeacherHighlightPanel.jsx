@@ -23,6 +23,7 @@ export default function TeacherHighlightPanel({
                     style={{ borderColor: highlight.color }}
                 >
                     <input
+                        data-highlight-index={index}
                         value={highlight.query}
                         placeholder="קוד או שם"
                         onChange={(e) =>

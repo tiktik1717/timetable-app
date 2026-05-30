@@ -14,6 +14,8 @@ export default function LoadItem({
   onAssignGroup,
   onHighlightGroup,
   teacherHighlight,
+  selectedLoadUnitId,
+  onSelectLoadUnit,
 }) {
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -61,6 +63,7 @@ export default function LoadItem({
         {...attributes}
         onMouseDown={() => setShowTooltip(false)}
         onClick={() => {
+          onSelectLoadUnit(unit.id);
           setShowTooltip(false);
           if (unit.constraintGroupId) {
             onHighlightGroup(unit.constraintGroupId);
@@ -77,6 +80,7 @@ export default function LoadItem({
           isFreeDay ? "load-item-free-day" : "",
           highlightedGroup ? "group-highlight" : "",
           teacherHighlight ? "teacher-search-highlight" : "",
+          selectedLoadUnitId === unit.id ? "selected-load-item" : "",
         ].join(" ")}
       >
         <span className="load-teacher-code">{label}</span>

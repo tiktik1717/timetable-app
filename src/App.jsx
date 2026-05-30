@@ -94,10 +94,10 @@ export default function App() {
   const [showConstraintGroupDialog, setShowConstraintGroupDialog] = useState(false);
   const [editingConstraintGroup, setEditingConstraintGroup] = useState(null);
   const [activeView, setActiveView] = useState("scheduler");
-
+  const [selectedLoadUnitId, setSelectedLoadUnitId] = useState(null);
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [showPanelsMenu, setShowPanelsMenu] = useState(false);
-
+  const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [visiblePanels, setVisiblePanels] = useState({
     groups: true,
     warnings: true,
@@ -294,11 +294,26 @@ export default function App() {
     });
   }
 
+  function getBalanceTextColor(backgroundColor) {
+    const color = backgroundColor.replace("#", "");
+
+    const r = parseInt(color.substring(0, 2), 16);
+    const g = parseInt(color.substring(2, 4), 16);
+    const b = parseInt(color.substring(4, 6), 16);
+
+    const brightness =
+      (r * 299 + g * 587 + b * 114) / 1000;
+
+    return brightness > 140 ? "#000" : "#fff";
+  }
+
   function getRemainingHoursForClassInDay(className, day) {
     let total = 0;
 
     for (const unit of teachingUnits) {
       if (unit.className !== className) continue;
+
+      if (isTeacherFreeDay(unit.teacherId, day)) continue;
 
       total += getRemainingUnitHours(unit.id);
     }
@@ -306,13 +321,72 @@ export default function App() {
     return total;
   }
 
-  function getDailyBalanceStatus(className, day) {
+  function quickPlaceSelectedLoadUnit(hour) {
+    if (!selectedLoadUnitId) return;
+
+    const unit = getUnitById(selectedLoadUnitId);
+    if (!unit) return;
+
+    if (isBlockedCell(unit.className, selectedDay, hour)) {
+      alert("לא ניתן לשבץ בשעה שאינה קיימת בכיתה זו ביום זה");
+      return;
+    }
+
+    if (isTeacherFreeDay(unit.teacherId, selectedDay)) {
+      alert("לא ניתן לשבץ מורה ביום החופשי שלו");
+      return;
+    }
+
+    const unitsToPlace = getSameTimeGroupUnits(unit);
+
+    const invalidUnits = unitsToPlace.filter((candidate) => {
+      const alreadyInTarget = getCellUnitIds(
+        selectedDay,
+        candidate.className,
+        hour
+      ).includes(candidate.id);
+
+      return !alreadyInTarget && !canPlaceUnitOnSelectedDay(candidate);
+    });
+
+    if (invalidUnits.length > 0) {
+      alert("לא ניתן לשבץ את כל הקבוצה");
+      return;
+    }
+
+    placeUnitsByClassAtHour(unitsToPlace, String(hour), false);
+  }
+
+  function getDailyBalanceColor(className, day) {
     const remaining = getRemainingHoursForClassInDay(className, day);
     const classHours = getClassHoursForDay(className, day);
 
-    if (remaining > classHours) return "good";
-    if (remaining === classHours) return "warning";
-    return "danger";
+    if (classHours <= 0) {
+      return "#eeeeee";
+    }
+
+    const ratio = remaining / classHours;
+
+    // אדום כהה
+    if (ratio <= 0.25) return "#b71c1c";
+
+    // אדום
+    if (ratio <= 0.5) return "#e53935";
+
+    // כתום
+    if (ratio <= 0.75) return "#fb8c00";
+
+    // צהוב
+    if (ratio <= 1.0) return "#fdd835";
+
+    // ירוק בהיר
+    if (ratio <= 1.25) return "#9ccc65";
+
+    // ירוק
+    if (ratio <= 1.5) return "#43a047";
+
+    // ירוק כהה
+    return "#1b5e20";
   }
 
   async function loadProjectFromFile(event) {
@@ -859,6 +933,82 @@ export default function App() {
       if (event.ctrlKey && (key === "y" || key === "ט")) {
         event.preventDefault();
         redo();
+        return;
+      }
+
+      if (event.altKey) {
+        const key = event.key.toLowerCase();
+
+        if (["1", "2", "3", "4", "5", "6"].includes(key)) {
+          event.preventDefault();
+          setSelectedDay(days[Number(key) - 1]);
+          setSelectedCell(null);
+          return;
+        }
+
+        if (key === "c" || key === "ק") {
+          event.preventDefault();
+          setDisplayMode("codes");
+          return;
+        }
+
+        if (key === "n" || key === "מ") {
+          event.preventDefault();
+          setDisplayMode("names");
+          return;
+        }
+
+        if (key === "f" || key === "כ") {
+          event.preventDefault();
+          setIsFocusMode((prev) => !prev);
+          return;
+        }
+
+        if (key === "v" || key === "ת") {
+          event.preventDefault();
+          setShowPanelsMenu((prev) => !prev);
+          return;
+        }
+      }
+
+      if (event.ctrlKey && (event.key.toLowerCase() === "d" || event.key === "ג")) {
+        event.preventDefault();
+        setVisiblePanels((prev) => ({
+          ...prev,
+          highlights: !prev.highlights,
+        }));
+        return;
+      }
+
+      if (
+        event.ctrlKey &&
+        ["1", "2", "3", "4"].includes(event.key)
+      ) {
+        event.preventDefault();
+        setVisiblePanels((prev) => ({
+          ...prev,
+          highlights: true,
+        }));
+
+        setTimeout(() => {
+          const input = document.querySelector(
+            `[data-highlight-index="${Number(event.key) - 1}"]`
+          );
+          input?.focus();
+          input?.select();
+        }, 0);
+
+        return;
+      }
+
+      if (
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        /^[1-9]$/.test(event.key)
+      ) {
+        const hour = Number(event.key);
+        quickPlaceSelectedLoadUnit(hour);
         return;
       }
 
@@ -2055,6 +2205,8 @@ export default function App() {
                                   isFreeDay={isFreeDay}
                                   group={group}
                                   teacherHighlight={teacherHighlight}
+                                  selectedLoadUnitId={selectedLoadUnitId}
+                                  onSelectLoadUnit={setSelectedLoadUnitId}
                                   onAssignGroup={(unit) => {
                                     setGroupDialogUnit(unit);
                                     setGroupDialogHours(String(unit.hours));
@@ -2069,16 +2221,23 @@ export default function App() {
                             })
                           }
                         </LoadCell>
-                        {visiblePanels.dailyBalance && (
-                          <td
-                            className={[
-                              "daily-balance-cell",
-                              `daily-balance-${getDailyBalanceStatus(className, selectedDay)}`,
-                            ].join(" ")}
-                          >
-                            {getRemainingHoursForClassInDay(className, selectedDay)}
-                          </td>
-                        )}
+
+                        {visiblePanels.dailyBalance && (() => {
+                          const balanceColor = getDailyBalanceColor(className, selectedDay);
+
+                          return (
+                            <td
+                              className="daily-balance-cell"
+                              style={{
+                                backgroundColor: balanceColor,
+                                color: getBalanceTextColor(balanceColor),
+                              }}
+                            >
+                              {getRemainingHoursForClassInDay(className, selectedDay)}
+                            </td>
+                          );
+                        })()}
+
                         <td
                           className={
                             hoveredCell?.className === className
@@ -2254,7 +2413,40 @@ export default function App() {
             loadProjectFromFile={loadProjectFromFile}
             handleExcelUpload={handleExcelUpload}
             clearProject={clearProject}
+            showHelp={() => setShowHelpDialog(true)}
           />
+        )}
+
+        {showHelpDialog && (
+          <div className="modal-backdrop" onClick={() => setShowHelpDialog(false)}>
+            <div className="group-dialog" onClick={(e) => e.stopPropagation()}>
+              <h3>עזרה וקיצורי מקלדת</h3>
+
+              <ul className="help-list">
+                <li><strong>Delete</strong> — מוחק תא מסומן.</li>
+                <li>גרירה למחסן — מוחקת שיבוץ.</li>
+                <li><strong>Ctrl + גרירה</strong> — החלפה בין תאים.</li>
+                <li><strong>Shift + גרירה לתא תפוס</strong> — מוסיף מורה לתא.</li>
+                <li>לחיצה על מורה במחסן ואז מספר — שיבוץ מהיר באותה שעה.</li>
+                <li><strong>Ctrl+Z / Ctrl+ז</strong> — ביטול פעולה.</li>
+                <li><strong>Ctrl+Y / Ctrl+ט</strong> — בצע שוב.</li>
+                <li><strong>Alt+1–6</strong> — מעבר בין ימים א–ו.</li>
+                <li><strong>Alt+C / Alt+ק</strong> — תצוגת קודים.</li>
+                <li><strong>Alt+N / Alt+מ</strong> — תצוגת שמות.</li>
+                <li><strong>Alt+F / Alt+כ</strong> — מסך שיבוץ מלא.</li>
+                <li><strong>Alt+V / Alt+ת</strong> — פתיחה/סגירה של תפריט תצוגה.</li>
+                <li><strong>Ctrl+D / Ctrl+ג</strong> — הצגה/הסתרה של פאנל הדגשת מורים.</li>
+                <li><strong>Ctrl+1–4</strong> — מעבר לתיבת הדגשת מורה 1–4.</li>
+              </ul>
+
+              <button
+                className="dialog-cancel"
+                onClick={() => setShowHelpDialog(false)}
+              >
+                סגור
+              </button>
+            </div>
+          </div>
         )}
 
         {groupDialogUnit && (
