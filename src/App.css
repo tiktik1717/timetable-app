@@ -953,3 +953,46 @@ th {
 .focus-toggle-button {
   margin-right: 8px;
 }
+
+.file-manager {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.file-manager h3 {
+  margin-top: 0;
+}
+
+.file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.file-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 150px;
+  height: 42px;
+
+  border: none;
+  border-radius: 6px;
+  background: #607d8b;
+  color: white;
+
+  font-size: 14px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.file-action-button:hover {
+  opacity: 0.9;
+}
+
+.danger-file-button {
+  background: #d32f2f;
+}

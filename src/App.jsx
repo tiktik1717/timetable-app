@@ -34,6 +34,7 @@ import SadinSheetEditor from "./components/SadinSheetEditor";
 import TeacherHighlightPanel, {
   createDefaultTeacherHighlights,
 } from "./components/TeacherHighlightPanel";
+import FileManager from "./components/FileManager";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -246,6 +247,30 @@ export default function App() {
     document.body.removeChild(link);
 
     URL.revokeObjectURL(url);
+  }
+
+  function clearProject() {
+    if (!confirm("האם למחוק את כל השיבוצים?")) return;
+
+    setSchedule({});
+    setHistory([]);
+    setFuture([]);
+    localStorage.removeItem("schoolSchedule");
+
+    setSchoolData((prev) => {
+      const cleanedSchoolData = {
+        ...prev,
+        teachingUnits: prev.teachingUnits.map((unit) => ({
+          ...unit,
+          constraintGroupId: null,
+          color: null,
+        })),
+      };
+
+      localStorage.setItem("schoolData", JSON.stringify(cleanedSchoolData));
+
+      return cleanedSchoolData;
+    });
   }
 
   async function loadProjectFromFile(event) {
@@ -1717,6 +1742,12 @@ export default function App() {
         {!isFocusMode && (
           <div className="view-tabs">
             <button
+              className={activeView === "file" ? "active-tab" : ""}
+              onClick={() => setActiveView("file")}
+            >
+              קובץ
+            </button>
+            <button
               className={activeView === "scheduler" ? "active-tab" : ""}
               onClick={() => setActiveView("scheduler")}
             >
@@ -1819,68 +1850,7 @@ export default function App() {
               >
                 בצע שוב
               </button>
-              {!isFocusMode && (
-                <>
 
-                  <button
-                    className="clear-button"
-                    onClick={() => {
-                      if (confirm("האם למחוק את כל השיבוצים?")) {
-                        setSchedule({});
-                        setHistory([]);
-                        setFuture([]);
-                        localStorage.removeItem("schoolSchedule");
-                      }
-                      setSchoolData((prev) => {
-                        const cleanedSchoolData = {
-                          ...prev,
-                          teachingUnits: prev.teachingUnits.map((unit) => ({
-                            ...unit,
-                            constraintGroupId: null,
-                            color: null,
-                          })),
-                        };
-
-                        localStorage.setItem(
-                          "schoolData",
-                          JSON.stringify(cleanedSchoolData)
-                        );
-
-                        return cleanedSchoolData;
-                      });
-                    }}
-                  >
-                    נקה מערכת
-                  </button>
-
-                  <label className="upload-button">
-                    ייבוא Excel
-                    <input
-                      type="file"
-                      accept=".xlsx,.xlsm,.xls"
-                      onChange={handleExcelUpload}
-                      hidden
-                    />
-                  </label>
-                </>
-              )}
-              <button
-                type="button"
-                className="action-button"
-                onClick={saveProjectToFile}
-              >
-                שמור פרויקט
-              </button>
-
-              <label className="upload-button">
-                טען פרויקט
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={loadProjectFromFile}
-                  hidden
-                />
-              </label>
               <div className="panels-menu-wrapper">
                 <button
                   className="action-button"
@@ -2216,6 +2186,16 @@ export default function App() {
           />
         )}
 
+
+        {activeView === "file" && (
+          <FileManager
+            saveProjectToFile={saveProjectToFile}
+            loadProjectFromFile={loadProjectFromFile}
+            handleExcelUpload={handleExcelUpload}
+            clearProject={clearProject}
+          />
+        )}
+        
         {groupDialogUnit && (
           <div className="modal-backdrop" onClick={() => setGroupDialogUnit(null)}>
             <div className="group-dialog" onClick={(e) => e.stopPropagation()}>
