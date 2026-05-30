@@ -859,3 +859,49 @@ th {
   color: #999;
   font-weight: bold;
 }
+
+.teacher-highlight-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #ccc;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.teacher-highlight-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 3px solid;
+  border-radius: 8px;
+  padding: 3px;
+  background: #fafafa;
+}
+
+.teacher-highlight-control input[type="text"],
+.teacher-highlight-control input:not([type]) {
+  width: 90px;
+  padding: 5px;
+  border: none;
+  outline: none;
+  background: white;
+}
+
+.teacher-highlight-color {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+}
+
+.teacher-search-highlight {
+  border-width: 3px !important;
+  border-style: solid !important;
+  font-weight: 800 !important;
+}

@@ -13,6 +13,7 @@ export default function LoadItem({
   highlightedGroup,
   onAssignGroup,
   onHighlightGroup,
+  teacherHighlight,
 }) {
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -34,6 +35,7 @@ export default function LoadItem({
       : undefined,
     backgroundColor,
     color: getReadableTextColor(backgroundColor),
+    borderColor: teacherHighlight?.color,
   };
 
   const label =
@@ -74,6 +76,7 @@ export default function LoadItem({
           remaining <= 0 ? "load-item-empty" : "",
           isFreeDay ? "load-item-free-day" : "",
           highlightedGroup ? "group-highlight" : "",
+          teacherHighlight ? "teacher-search-highlight" : "",
         ].join(" ")}
       >
         <span className="load-teacher-code">{label}</span>

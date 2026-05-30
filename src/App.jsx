@@ -31,6 +31,9 @@ import ClassesManager from "./components/ClassesManager";
 import MeetingsManager from "./components/MeetingsManager";
 import DailyHoursManager from "./components/DailyHoursManager";
 import SadinSheetEditor from "./components/SadinSheetEditor";
+import TeacherHighlightPanel, {
+  createDefaultTeacherHighlights,
+} from "./components/TeacherHighlightPanel";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -70,6 +73,20 @@ export default function App() {
   const [showConstraintGroupDialog, setShowConstraintGroupDialog] = useState(false);
   const [editingConstraintGroup, setEditingConstraintGroup] = useState(null);
   const [activeView, setActiveView] = useState("scheduler");
+  const [teacherHighlights, setTeacherHighlights] = useState(() => {
+    const saved = localStorage.getItem("teacherHighlights");
+
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return createDefaultTeacherHighlights();
+      }
+    }
+
+    return createDefaultTeacherHighlights();
+  });
+
 
   const [schoolData, setSchoolData] = useState(() => {
     const defaultData = {
@@ -153,6 +170,13 @@ export default function App() {
     futureRef.current = future;
   }, [future]);
 
+  useEffect(() => {
+    localStorage.setItem(
+      "teacherHighlights",
+      JSON.stringify(teacherHighlights)
+    );
+  }, [teacherHighlights]);
+
   function undo() {
     const currentHistory = historyRef.current;
 
@@ -179,6 +203,31 @@ export default function App() {
     setSchedule(nextSchedule);
     setHistory(newHistory);
     setFuture(newFuture);
+  }
+
+  function getTeacherHighlight(teacher) {
+    if (!teacher) return null;
+
+    for (const highlight of teacherHighlights) {
+      const query = highlight.query.trim();
+
+      if (!query) continue;
+
+      const isNumericQuery = /^\d+$/.test(query);
+
+      if (isNumericQuery && teacher.id === query) {
+        return highlight;
+      }
+
+      if (
+        !isNumericQuery &&
+        teacher.name?.toLowerCase().includes(query.toLowerCase())
+      ) {
+        return highlight;
+      }
+    }
+
+    return null;
   }
 
   function getClassHoursForDay(className, day) {
@@ -1748,7 +1797,12 @@ export default function App() {
             />
 
             <WarningsPanel warnings={warnings} selectedDay={selectedDay} />
-            
+
+            <TeacherHighlightPanel
+              teacherHighlights={teacherHighlights}
+              setTeacherHighlights={setTeacherHighlights}
+            />
+
             <div
               className="table-scroll-wrapper"
               ref={tableScrollRef}
@@ -1787,6 +1841,8 @@ export default function App() {
                               if (!showFreeDayTeachers && isFreeDay) return null;
                               //const group = getConstraintGroupById(unit.constraintGroupId);
                               const group = getUnitDisplayGroup(unit);
+                              const teacherHighlight = getTeacherHighlight(teacher);
+
                               return (
                                 <LoadItem
                                   key={unit.id}
@@ -1797,6 +1853,7 @@ export default function App() {
                                   displayMode={displayMode}
                                   isFreeDay={isFreeDay}
                                   group={group}
+                                  teacherHighlight={teacherHighlight}
                                   onAssignGroup={(unit) => {
                                     setGroupDialogUnit(unit);
                                     setGroupDialogHours(String(unit.hours));
@@ -1828,10 +1885,14 @@ export default function App() {
 
                           const teachersByUnit = {};
                           const groupsByUnit = {};
+                          const teacherHighlightsByUnit = {};
 
                           for (const unit of units) {
-                            teachersByUnit[unit.id] = getTeacherById(unit.teacherId);
+                            const teacher = getTeacherById(unit.teacherId);
+
+                            teachersByUnit[unit.id] = teacher;
                             groupsByUnit[unit.id] = getUnitDisplayGroup(unit);
+                            teacherHighlightsByUnit[unit.id] = getTeacherHighlight(teacher);
                           }
 
                           const conflictingTeacherIds = units
@@ -1877,6 +1938,7 @@ export default function App() {
                               blocked={blocked}
                               highlighted={highlighted}
                               displayMode={displayMode}
+                              teacherHighlightsByUnit={teacherHighlightsByUnit}
                               onClick={() => {
                                 setSelectedCell({
                                   className,

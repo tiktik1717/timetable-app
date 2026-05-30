@@ -14,6 +14,7 @@ export default function DroppableCell({
   onClick,
   highlightedUnitIds,
   blocked,
+  teacherHighlightsByUnit,
 }) {
   const cellId = `${className}-${hour}`;
 
@@ -68,6 +69,7 @@ export default function DroppableCell({
           className="cell-stack"
         >
           {units.map((unit) => {
+            const teacherHighlight = teacherHighlightsByUnit?.[unit.id];
             const teacher = teachersByUnit[unit.id];
             const group = groupsByUnit[unit.id];
             const isHighlighted = highlightedUnitIds?.has(unit.id);
@@ -83,10 +85,12 @@ export default function DroppableCell({
                   "cell-teacher",
                   isConflicting ? "cell-teacher-conflict" : "",
                   isHighlighted ? "group-highlight" : "",
+                  teacherHighlight ? "teacher-search-highlight" : "",
                 ].join(" ")}
                 style={{
                   backgroundColor,
                   color: getReadableTextColor(backgroundColor),
+                  borderColor: teacherHighlight?.color,
                 }}
               >
                 {displayMode === "names"
