@@ -75,6 +75,7 @@ export default function App() {
     };
   }, []);
 
+
   const panelsMenuRef = useRef(null);
 
   const [selectedCell, setSelectedCell] = useState(null);
@@ -105,6 +106,28 @@ export default function App() {
     dailyBalance: true,
   });
 
+  const [checkpoints, setCheckpoints] = useState(() => {
+    const saved = localStorage.getItem("checkpoints");
+
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return [];
+      }
+    }
+
+    return [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem("checkpoints", JSON.stringify(checkpoints));
+  }, [checkpoints]);
+
+
+  const [activeCheckpointId, setActiveCheckpointId] = useState(() => {
+    return localStorage.getItem("activeCheckpointId") || "";
+  });
   const [teacherHighlights, setTeacherHighlights] = useState(() => {
     const saved = localStorage.getItem("teacherHighlights");
 
@@ -118,6 +141,10 @@ export default function App() {
 
     return createDefaultTeacherHighlights();
   });
+
+  useEffect(() => {
+    localStorage.setItem("activeCheckpointId", activeCheckpointId || "");
+  }, [activeCheckpointId]);
 
 
   const [schoolData, setSchoolData] = useState(() => {
@@ -251,6 +278,8 @@ export default function App() {
       schoolData,
       schedule,
       teacherHighlights,
+      checkpoints,
+      activeCheckpointId,
     };
 
     const json = JSON.stringify(projectData, null, 2);
@@ -294,6 +323,59 @@ export default function App() {
     });
   }
 
+  function getActiveCheckpoint() {
+    return checkpoints.find(
+      (checkpoint) => checkpoint.id === activeCheckpointId
+    );
+  }
+
+  function getCellUnitIdsFromAnySchedule(scheduleObject, day, className, hour) {
+    const value = scheduleObject?.[day]?.[className]?.[hour];
+
+    if (!value) return [];
+
+    return Array.isArray(value) ? value : [value];
+  }
+
+  function getTeacherNamesForScheduleCell(scheduleObject, day, className, hour) {
+    const unitIds = getCellUnitIdsFromAnySchedule(
+      scheduleObject,
+      day,
+      className,
+      hour
+    );
+
+    return unitIds
+      .map(getUnitById)
+      .filter(Boolean)
+      .map((unit) => getTeacherById(unit.teacherId)?.name)
+      .filter(Boolean)
+      .sort()
+      .join("|");
+  }
+
+  function isShahafCellChanged(day, className, hour) {
+    const checkpoint = getActiveCheckpoint();
+
+    if (!checkpoint) return false;
+
+    const currentValue = getTeacherNamesForScheduleCell(
+      schedule,
+      day,
+      className,
+      hour
+    );
+
+    const checkpointValue = getTeacherNamesForScheduleCell(
+      checkpoint.schedule || {},
+      day,
+      className,
+      hour
+    );
+
+    return currentValue !== checkpointValue;
+  }
+
   function getBalanceTextColor(backgroundColor) {
     const color = backgroundColor.replace("#", "");
 
@@ -319,6 +401,75 @@ export default function App() {
     }
 
     return total;
+  }
+
+  function createCheckpoint() {
+    const name = prompt("שם נקודת השמירה");
+
+    if (!name || !name.trim()) {
+      alert("יש להזין שם לנקודת השמירה");
+      return;
+    }
+
+    const newCheckpoint = {
+      id: `checkpoint-${Date.now()}`,
+      name: name.trim(),
+      createdAt: new Date().toISOString(),
+      schedule: structuredClone(schedule),
+      schoolData: structuredClone(schoolData),
+    };
+
+    setCheckpoints((prev) => {
+      const next = [newCheckpoint, ...prev];
+
+      if (next.length > 10) {
+        alert("נשמרות עד 10 נקודות שמירה. הנקודה הישנה ביותר נמחקה.");
+        return next.slice(0, 10);
+      }
+
+      return next;
+    });
+
+    setActiveCheckpointId(newCheckpoint.id);
+  }
+
+  function deleteCheckpoint(checkpointId) {
+    if (!confirm("למחוק את נקודת השמירה?")) return;
+
+    setCheckpoints((prev) =>
+      prev.filter((checkpoint) => checkpoint.id !== checkpointId)
+    );
+
+    if (activeCheckpointId === checkpointId) {
+      setActiveCheckpointId("");
+    }
+  }
+
+  function restoreCheckpoint(checkpointId) {
+    const checkpoint = checkpoints.find((item) => item.id === checkpointId);
+
+    if (!checkpoint) return;
+
+    if (!confirm("לשחזר את המערכת לנקודת השמירה הזו? הפעולה תחליף את המצב הנוכחי.")) {
+      return;
+    }
+
+    const normalizedSchoolData = ensureDailyHoursForClasses(
+      checkpoint.schoolData
+    );
+
+    setSchoolData(normalizedSchoolData);
+    setSchedule(checkpoint.schedule || {});
+    setHistory([]);
+    setFuture([]);
+
+    localStorage.setItem("schoolData", JSON.stringify(normalizedSchoolData));
+    localStorage.setItem(
+      "schoolSchedule",
+      JSON.stringify(checkpoint.schedule || {})
+    );
+
+    setActiveCheckpointId(checkpointId);
   }
 
   function quickPlaceSelectedLoadUnit(hour) {
@@ -412,6 +563,10 @@ export default function App() {
         projectData.teacherHighlights || createDefaultTeacherHighlights()
       );
 
+
+      setCheckpoints(projectData.checkpoints || []);
+      setActiveCheckpointId(projectData.activeCheckpointId || "");
+
       setHistory([]);
       setFuture([]);
 
@@ -425,6 +580,16 @@ export default function App() {
         JSON.stringify(
           projectData.teacherHighlights || createDefaultTeacherHighlights()
         )
+      );
+
+      localStorage.setItem(
+        "checkpoints",
+        JSON.stringify(projectData.checkpoints || [])
+      );
+
+      localStorage.setItem(
+        "activeCheckpointId",
+        projectData.activeCheckpointId || ""
       );
 
       alert("הפרויקט נטען בהצלחה");
@@ -2432,6 +2597,8 @@ export default function App() {
             getTeacherById={getTeacherById}
             dailyHoursByClass={dailyHoursByClass}
             getClassHoursForDay={getClassHoursForDay}
+            isShahafCellChanged={isShahafCellChanged}
+            activeCheckpoint={getActiveCheckpoint()}
           />
         )}
 
@@ -2498,7 +2665,12 @@ export default function App() {
             loadProjectFromFile={loadProjectFromFile}
             handleExcelUpload={handleExcelUpload}
             clearProject={clearProject}
-            showHelp={() => setShowHelpDialog(true)}
+            checkpoints={checkpoints}
+            activeCheckpointId={activeCheckpointId}
+            setActiveCheckpointId={setActiveCheckpointId}
+            createCheckpoint={createCheckpoint}
+            deleteCheckpoint={deleteCheckpoint}
+            restoreCheckpoint={restoreCheckpoint}
           />
         )}
 

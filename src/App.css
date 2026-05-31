@@ -1025,3 +1025,37 @@ th {
   padding-right: 20px;
   font-size: 14px;
 }
+
+.file-manager hr {
+  margin: 18px 0;
+  border: none;
+  border-top: 1px solid #ddd;
+}
+
+.checkpoints-section {
+  margin-top: 12px;
+}
+
+.checkpoints-table td {
+  vertical-align: middle;
+}
+
+.checkpoints-table .mini-button {
+  margin: 2px;
+}
+
+.changed-cell {
+  outline: 3px solid #ff9800;
+  outline-offset: -3px;
+  background: #fff3e0 !important;
+}
+
+.comparison-note {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  background: #e3f2fd;
+  border: 1px solid #64b5f6;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: bold;
+}

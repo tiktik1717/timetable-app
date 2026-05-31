@@ -7,6 +7,8 @@ export default function ShahafView({
     getUnitById,
     getTeacherById,
     getClassHoursForDay,
+    isShahafCellChanged,
+    activeCheckpoint,
 }) {
     const maxHoursForClass = Math.max(
         0,
@@ -22,7 +24,11 @@ export default function ShahafView({
         <div className="shahaf-view">
             <div className="shahaf-header">
                 <h3>תצוגת הזנה ידנית לשחף</h3>
-
+                {activeCheckpoint && (
+                    <div className="comparison-note">
+                        השוואה מול נקודת שמירה: {activeCheckpoint.name}
+                    </div>
+                )}
                 <label>
                     כיתה:
                     <select
@@ -73,8 +79,20 @@ export default function ShahafView({
                                     .map((unit) => getTeacherById(unit.teacherId)?.name)
                                     .filter(Boolean);
 
+                                const changed = isShahafCellChanged?.(
+                                    day,
+                                    selectedClassForShahaf,
+                                    hour
+                                );
+
                                 return (
-                                    <td key={day} className="shahaf-cell">
+                                    <td
+                                        key={day}
+                                        className={[
+                                            "shahaf-cell",
+                                            changed ? "changed-cell" : "",
+                                        ].join(" ")}
+                                    >
                                         {teachers.map((teacherName, index) => (
                                             <div key={index}>{teacherName}</div>
                                         ))}
