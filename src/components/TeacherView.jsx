@@ -7,6 +7,10 @@ export default function TeacherView({
     getCellUnitIds,
     getUnitById,
     getClassHoursForDay,
+    checkpoints,
+    comparisonCheckpointId,
+    setComparisonCheckpointId,
+    isTeacherCellChanged,
 }) {
     function getTeacherLessons(day, hour) {
         const lessons = [];
@@ -35,7 +39,10 @@ export default function TeacherView({
     const maxHoursForAllClasses = Math.max(
         0,
         ...days.map((day) =>
-            Math.max(0, ...classes.map((className) => getClassHoursForDay(className, day)))
+            Math.max(
+                0,
+                ...classes.map((className) => getClassHoursForDay(className, day))
+            )
         )
     );
 
@@ -62,6 +69,22 @@ export default function TeacherView({
                         ))}
                     </select>
                 </label>
+
+                <label>
+                    השווה מול:
+                    <select
+                        value={comparisonCheckpointId}
+                        onChange={(e) => setComparisonCheckpointId(e.target.value)}
+                    >
+                        <option value="">ללא השוואה</option>
+
+                        {checkpoints.map((checkpoint) => (
+                            <option key={checkpoint.id} value={checkpoint.id}>
+                                {checkpoint.name}
+                            </option>
+                        ))}
+                    </select>
+                </label>
             </div>
 
             <table className="teacher-view-table">
@@ -82,8 +105,20 @@ export default function TeacherView({
                             {days.map((day) => {
                                 const lessons = getTeacherLessons(day, hour);
 
+                                const changed = isTeacherCellChanged?.(
+                                    selectedTeacherForView,
+                                    day,
+                                    hour
+                                );
+
                                 return (
-                                    <td key={day} className="teacher-view-cell">
+                                    <td
+                                        key={day}
+                                        className={[
+                                            "teacher-view-cell",
+                                            changed ? "changed-cell" : "",
+                                        ].join(" ")}
+                                    >
                                         {lessons.map((lesson, index) => (
                                             <div key={index}>{lesson}</div>
                                         ))}

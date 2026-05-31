@@ -43,11 +43,7 @@ export default function ShahafView({
                         ))}
                     </select>
                 </label>
-                {comparisonCheckpoint && (
-                    <div className="comparison-note">
-                        השוואה מול נקודת שמירה: {comparisonCheckpoint.name}
-                    </div>
-                )}
+
                 <label>
                     כיתה:
                     <select

@@ -1008,6 +1008,59 @@ export default function App() {
     setEditingConstraintGroup(null);
     setShowConstraintGroupDialog(false);
   }
+  function isTeacherCellChanged(
+    teacherId,
+    day,
+    hour
+  ) {
+    const checkpoint = getComparisonCheckpoint();
+
+    if (!checkpoint) return false;
+
+    const currentClasses = getTeacherClassesForCell(
+      schedule,
+      teacherId,
+      day,
+      hour
+    );
+
+    const checkpointClasses = getTeacherClassesForCell(
+      checkpoint.schedule || {},
+      teacherId,
+      day,
+      hour
+    );
+
+    return currentClasses !== checkpointClasses;
+  }
+
+  function getTeacherClassesForCell(
+    scheduleObject,
+    teacherId,
+    day,
+    hour
+  ) {
+    const result = [];
+
+    for (const className of classes) {
+      const unitIds =
+        scheduleObject?.[day]?.[className]?.[hour] || [];
+
+      const units = unitIds
+        .map(getUnitById)
+        .filter(Boolean);
+
+      if (
+        units.some(
+          (unit) => unit.teacherId === teacherId
+        )
+      ) {
+        result.push(className);
+      }
+    }
+
+    return result.sort().join("|");
+  }
 
   function deleteConstraintGroup(groupId) {
     if (!confirm("למחוק את קבוצת השיבוץ? השיוך יוסר מכל היחידות.")) {
@@ -2635,7 +2688,7 @@ export default function App() {
             dailyHoursByClass={dailyHoursByClass}
             getClassHoursForDay={getClassHoursForDay}
             isShahafCellChanged={isShahafCellChanged}
-            activeCheckpoint={getActiveCheckpoint()}
+
             checkpoints={checkpoints}
             comparisonCheckpointId={comparisonCheckpointId}
             setComparisonCheckpointId={setComparisonCheckpointId}
@@ -2654,6 +2707,11 @@ export default function App() {
             getCellUnitIds={getCellUnitIds}
             getUnitById={getUnitById}
             getClassHoursForDay={getClassHoursForDay}
+            checkpoints={checkpoints}
+            comparisonCheckpointId={comparisonCheckpointId}
+            setComparisonCheckpointId={setComparisonCheckpointId}
+            comparisonCheckpoint={getComparisonCheckpoint()}
+            isTeacherCellChanged={isTeacherCellChanged}
           />
         )}
 
