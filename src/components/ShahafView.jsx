@@ -9,6 +9,10 @@ export default function ShahafView({
     getClassHoursForDay,
     isShahafCellChanged,
     activeCheckpoint,
+    checkpoints,
+    comparisonCheckpointId,
+    setComparisonCheckpointId,
+    comparisonCheckpoint,
 }) {
     const maxHoursForClass = Math.max(
         0,
@@ -24,9 +28,24 @@ export default function ShahafView({
         <div className="shahaf-view">
             <div className="shahaf-header">
                 <h3>תצוגת הזנה ידנית לשחף</h3>
-                {activeCheckpoint && (
+                <label>
+                    השווה מול:
+                    <select
+                        value={comparisonCheckpointId}
+                        onChange={(e) => setComparisonCheckpointId(e.target.value)}
+                    >
+                        <option value="">ללא השוואה</option>
+
+                        {checkpoints.map((checkpoint) => (
+                            <option key={checkpoint.id} value={checkpoint.id}>
+                                {checkpoint.name}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                {comparisonCheckpoint && (
                     <div className="comparison-note">
-                        השוואה מול נקודת שמירה: {activeCheckpoint.name}
+                        השוואה מול נקודת שמירה: {comparisonCheckpoint.name}
                     </div>
                 )}
                 <label>

@@ -125,9 +125,14 @@ export default function App() {
   }, [checkpoints]);
 
 
-  const [activeCheckpointId, setActiveCheckpointId] = useState(() => {
-    return localStorage.getItem("activeCheckpointId") || "";
+  const [currentCheckpointId, setCurrentCheckpointId] = useState(() => {
+    return localStorage.getItem("currentCheckpointId") || "";
   });
+
+  const [comparisonCheckpointId, setComparisonCheckpointId] = useState(() => {
+    return localStorage.getItem("comparisonCheckpointId") || "";
+  });
+
   const [teacherHighlights, setTeacherHighlights] = useState(() => {
     const saved = localStorage.getItem("teacherHighlights");
 
@@ -143,8 +148,12 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem("activeCheckpointId", activeCheckpointId || "");
-  }, [activeCheckpointId]);
+    localStorage.setItem("currentCheckpointId", currentCheckpointId || "");
+  }, [currentCheckpointId]);
+
+  useEffect(() => {
+    localStorage.setItem("comparisonCheckpointId", comparisonCheckpointId || "");
+  }, [comparisonCheckpointId]);
 
 
   const [schoolData, setSchoolData] = useState(() => {
@@ -279,7 +288,8 @@ export default function App() {
       schedule,
       teacherHighlights,
       checkpoints,
-      activeCheckpointId,
+      currentCheckpointId,
+      comparisonCheckpointId,
     };
 
     const json = JSON.stringify(projectData, null, 2);
@@ -323,9 +333,9 @@ export default function App() {
     });
   }
 
-  function getActiveCheckpoint() {
+  function getComparisonCheckpoint() {
     return checkpoints.find(
-      (checkpoint) => checkpoint.id === activeCheckpointId
+      (checkpoint) => checkpoint.id === comparisonCheckpointId
     );
   }
 
@@ -355,7 +365,7 @@ export default function App() {
   }
 
   function isShahafCellChanged(day, className, hour) {
-    const checkpoint = getActiveCheckpoint();
+    const checkpoint = getComparisonCheckpoint();
 
     if (!checkpoint) return false;
 
@@ -430,7 +440,20 @@ export default function App() {
       return next;
     });
 
-    setActiveCheckpointId(newCheckpoint.id);
+    setCurrentCheckpointId(newCheckpoint.id);
+    setComparisonCheckpointId(getPreviousCheckpointId(newCheckpoint.id, [newCheckpoint, ...checkpoints]));
+  }
+
+  function getPreviousCheckpointId(checkpointId, checkpointList = checkpoints) {
+    const sorted = [...checkpointList].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
+    const index = sorted.findIndex((checkpoint) => checkpoint.id === checkpointId);
+
+    if (index === -1 || index === sorted.length - 1) return "";
+
+    return sorted[index + 1].id;
   }
 
   function deleteCheckpoint(checkpointId) {
@@ -440,8 +463,12 @@ export default function App() {
       prev.filter((checkpoint) => checkpoint.id !== checkpointId)
     );
 
-    if (activeCheckpointId === checkpointId) {
-      setActiveCheckpointId("");
+    if (currentCheckpointId === checkpointId) {
+      setCurrentCheckpointId("");
+    }
+
+    if (comparisonCheckpointId === checkpointId) {
+      setComparisonCheckpointId("");
     }
   }
 
@@ -469,7 +496,8 @@ export default function App() {
       JSON.stringify(checkpoint.schedule || {})
     );
 
-    setActiveCheckpointId(checkpointId);
+    setCurrentCheckpointId(checkpointId);
+    setComparisonCheckpointId(getPreviousCheckpointId(checkpointId));
   }
 
   function quickPlaceSelectedLoadUnit(hour) {
@@ -565,7 +593,11 @@ export default function App() {
 
 
       setCheckpoints(projectData.checkpoints || []);
-      setActiveCheckpointId(projectData.activeCheckpointId || "");
+      setCurrentCheckpointId(
+        projectData.currentCheckpointId || projectData.activeCheckpointId || ""
+      );
+
+      setComparisonCheckpointId(projectData.comparisonCheckpointId || "");
 
       setHistory([]);
       setFuture([]);
@@ -588,8 +620,13 @@ export default function App() {
       );
 
       localStorage.setItem(
-        "activeCheckpointId",
-        projectData.activeCheckpointId || ""
+        "currentCheckpointId",
+        projectData.currentCheckpointId || projectData.activeCheckpointId || ""
+      );
+
+      localStorage.setItem(
+        "comparisonCheckpointId",
+        projectData.comparisonCheckpointId || ""
       );
 
       alert("הפרויקט נטען בהצלחה");
@@ -2599,6 +2636,10 @@ export default function App() {
             getClassHoursForDay={getClassHoursForDay}
             isShahafCellChanged={isShahafCellChanged}
             activeCheckpoint={getActiveCheckpoint()}
+            checkpoints={checkpoints}
+            comparisonCheckpointId={comparisonCheckpointId}
+            setComparisonCheckpointId={setComparisonCheckpointId}
+            comparisonCheckpoint={getComparisonCheckpoint()}
           />
         )}
 
@@ -2666,8 +2707,7 @@ export default function App() {
             handleExcelUpload={handleExcelUpload}
             clearProject={clearProject}
             checkpoints={checkpoints}
-            activeCheckpointId={activeCheckpointId}
-            setActiveCheckpointId={setActiveCheckpointId}
+            currentCheckpointId={currentCheckpointId}
             createCheckpoint={createCheckpoint}
             deleteCheckpoint={deleteCheckpoint}
             restoreCheckpoint={restoreCheckpoint}
