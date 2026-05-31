@@ -11,11 +11,11 @@ export default function LoadItem({
   isFreeDay,
   group,
   highlightedGroup,
-  onAssignGroup,
-  onHighlightGroup,
   teacherHighlight,
   selectedLoadUnitId,
   onSelectLoadUnit,
+  onAssignGroup,
+  onHighlightGroup,
 }) {
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -61,10 +61,20 @@ export default function LoadItem({
         style={style}
         {...listeners}
         {...attributes}
-        onMouseDown={() => setShowTooltip(false)}
-        onClick={() => {
-          onSelectLoadUnit(unit.id);
+        onMouseDown={() => {
           setShowTooltip(false);
+          onSelectLoadUnit(unit.id);
+
+          if (unit.constraintGroupId) {
+            onHighlightGroup(unit.constraintGroupId);
+          }
+        }}
+        onClick={(event) => {
+          event.stopPropagation();
+
+          setShowTooltip(false);
+          onSelectLoadUnit(unit.id);
+
           if (unit.constraintGroupId) {
             onHighlightGroup(unit.constraintGroupId);
           }
@@ -74,6 +84,7 @@ export default function LoadItem({
           setShowTooltip(false);
           onAssignGroup(unit);
         }}
+
         className={[
           "load-item",
           remaining <= 0 ? "load-item-empty" : "",

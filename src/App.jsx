@@ -322,6 +322,7 @@ export default function App() {
   }
 
   function quickPlaceSelectedLoadUnit(hour) {
+    //console.log("quick place", selectedLoadUnitId, hour);
     if (!selectedLoadUnitId) return;
 
     const unit = getUnitById(selectedLoadUnitId);
@@ -892,6 +893,15 @@ export default function App() {
 
   useEffect(() => {
     function handleKeyDown(event) {
+      const tagName = event.target.tagName;
+
+      if (
+        tagName === "INPUT" ||
+        tagName === "TEXTAREA" ||
+        tagName === "SELECT"
+      ) {
+        return;
+      }
       const key = event.key.toLowerCase();
 
       const scrollEl = tableScrollRef.current;
@@ -1007,8 +1017,12 @@ export default function App() {
         !event.shiftKey &&
         /^[1-9]$/.test(event.key)
       ) {
+        event.preventDefault();
+        event.stopPropagation();
+
         const hour = Number(event.key);
         quickPlaceSelectedLoadUnit(hour);
+
         return;
       }
 
@@ -1022,6 +1036,15 @@ export default function App() {
     }
 
     function handleKeyUp(event) {
+      const tagName = event.target.tagName;
+
+      if (
+        tagName === "INPUT" ||
+        tagName === "TEXTAREA" ||
+        tagName === "SELECT"
+      ) {
+        return;
+      }
       if (event.key === "Control") setCtrlPressed(false);
       if (event.key === "Shift") setShiftPressed(false);
     }
@@ -1033,7 +1056,52 @@ export default function App() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [selectedCell, schedule, selectedDay]);
+  }, [
+    selectedCell,
+    schedule,
+    selectedDay,
+    selectedLoadUnitId,
+    teachingUnits,
+    classes,
+    days,
+    hours,
+  ]);
+
+
+  function removeSameTimeGroupsFromTarget(newSchedule, day, hour, targetUnitIds) {
+    const groupIdsToRemove = new Set();
+
+    for (const unitId of targetUnitIds) {
+      const unit = getUnitById(unitId);
+
+      if (unit && isSameTimeGroup(unit)) {
+        groupIdsToRemove.add(unit.constraintGroupId);
+      }
+    }
+
+    if (groupIdsToRemove.size === 0) return;
+
+    for (const groupId of groupIdsToRemove) {
+      const groupUnits = getScheduledSameTimeGroupUnitsAt(day, hour, groupId);
+
+      for (const unit of groupUnits) {
+        const currentUnits = getCellUnitIdsFromSchedule(
+          newSchedule,
+          day,
+          unit.className,
+          hour
+        );
+
+        setCellUnitIds(
+          newSchedule,
+          day,
+          unit.className,
+          hour,
+          currentUnits.filter((id) => id !== unit.id)
+        );
+      }
+    }
+  }
 
   function getConstraintGroupById(groupId) {
     return constraintGroups.find((group) => group.id === groupId);
@@ -1456,6 +1524,15 @@ export default function App() {
           hour
         );
 
+        if (!append) {
+          removeSameTimeGroupsFromTarget(
+            newSchedule,
+            selectedDay,
+            hour,
+            currentUnits
+          );
+        }
+
         const baseUnits = append ? [...currentUnits] : [];
 
         for (const unit of unitsForClass) {
@@ -1724,10 +1801,15 @@ export default function App() {
   function handleDragEnd(event) {
     const { active, over } = event;
     if (!over) return;
+    if (active.id === over.id) {
+      return;
+    }
 
     const data = active.data.current;
     const overData = over.data.current;
-
+    if (data?.source === "load" && !overData) {
+      return;
+    }
     if (data?.source === "cell" && overData?.source === "loadCell") {
       if (data.fromClass !== overData.className) {
         alert("אפשר להחזיר מורה רק למחסן של אותה כיתה");
@@ -1786,6 +1868,9 @@ export default function App() {
     }
 
     if (data?.source === "load") {
+      if (!overData || overData.source !== "cell") {
+        return;
+      }
       const unit = getUnitById(data.unitId);
 
       if (!unit) return;

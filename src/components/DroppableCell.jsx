@@ -20,6 +20,11 @@ export default function DroppableCell({
 
   const { setNodeRef: setDroppableRef } = useDroppable({
     id: cellId,
+    data: {
+      source: "cell",
+      className,
+      hour: String(hour),
+    },
     disabled: blocked,
   });
 
