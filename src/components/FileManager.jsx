@@ -18,7 +18,7 @@ export default function FileManager({
     loadCloudProjects,
     saveProjectToCloud,
     updateSelectedCloudProject,
-    loadSelectedCloudProject,
+    handleCloudProjectSelection,
     deleteSelectedCloudProject,
     hasUnsavedCloudChanges,
     lastCloudSavedAt,
@@ -51,7 +51,7 @@ export default function FileManager({
                 <div className="cloud-actions">
                     <select
                         value={selectedCloudProjectId}
-                        onChange={(e) => setSelectedCloudProjectId(e.target.value)}
+                        onChange={(e) => handleCloudProjectSelection(e.target.value)}
                         disabled={!user}
                     >
                         <option value="">בחר פרויקט בענן</option>
@@ -77,14 +77,6 @@ export default function FileManager({
                         disabled={!user || !selectedCloudProjectId}
                     >
                         עדכן פרויקט נבחר
-                    </button>
-
-                    <button
-                        className="file-action-button"
-                        onClick={loadSelectedCloudProject}
-                        disabled={!user || !selectedCloudProjectId}
-                    >
-                        טען פרויקט נבחר
                     </button>
 
                     <button

@@ -103,7 +103,7 @@ export default function App() {
   const [showHelpDialog, setShowHelpDialog] = useState(false);
   const [user, setUser] = useState(null);
   const [cloudProjects, setCloudProjects] = useState([]);
-  const [selectedCloudProjectId, setSelectedCloudProjectId] = useState("");
+
   const [visiblePanels, setVisiblePanels] = useState({
     groups: true,
     warnings: true,
@@ -145,6 +145,16 @@ export default function App() {
     };
   }, []);
 
+  const [selectedCloudProjectId, setSelectedCloudProjectId] = useState(() => {
+    return localStorage.getItem("selectedCloudProjectId") || "";
+  });
+
+  useEffect(() => {
+    localStorage.setItem(
+      "selectedCloudProjectId",
+      selectedCloudProjectId || ""
+    );
+  }, [selectedCloudProjectId]);
 
   useEffect(() => {
     localStorage.setItem("checkpoints", JSON.stringify(checkpoints));
@@ -226,7 +236,6 @@ export default function App() {
     comparisonCheckpointId,
   ]);
 
-  
   const {
     teachers,
     classes,
@@ -286,27 +295,54 @@ export default function App() {
   }, [teacherHighlights]);
 
   useEffect(() => {
-    if (user) {
-      loadCloudProjects();
-    } else {
-      setCloudProjects([]);
-      setSelectedCloudProjectId("");
+    async function initializeCloudProjects() {
+      if (!user) {
+        setCloudProjects([]);
+        setSelectedCloudProjectId("");
+        return;
+      }
+
+      await loadCloudProjects();
+
+      const savedProjectId = localStorage.getItem("selectedCloudProjectId");
+
+      if (savedProjectId) {
+        await loadCloudProjectById(savedProjectId);
+      }
     }
+
+    initializeCloudProjects();
   }, [user]);
 
 
   useEffect(() => {
-    if (!hasUnsavedCloudChanges || !selectedCloudProjectId || !user) return;
+    if (!user || !selectedCloudProjectId || !hasUnsavedCloudChanges) return;
 
-    const timer = setTimeout(() => {
-      autoSaveSelectedCloudProject();
+    const timer = setTimeout(async () => {
+      console.log("auto saving to cloud...");
+      const { error } = await supabase
+        .from("projects")
+        .update({
+          data: buildProjectData(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", selectedCloudProjectId);
+
+      if (error) {
+        console.error("Auto save failed:", error);
+        return;
+      }
+
+      setHasUnsavedCloudChanges(false);
+      setLastCloudSavedAt(new Date().toLocaleTimeString("he-IL"));
+      loadCloudProjects();
     }, 30000);
 
     return () => clearTimeout(timer);
   }, [
-    hasUnsavedCloudChanges,
-    selectedCloudProjectId,
     user,
+    selectedCloudProjectId,
+    hasUnsavedCloudChanges,
     schoolData,
     schedule,
     teacherHighlights,
@@ -326,6 +362,87 @@ export default function App() {
       currentCheckpointId,
       comparisonCheckpointId,
     };
+  }
+
+  async function loadCloudProjectById(projectId) {
+    if (!user) {
+      alert("יש להתחבר לפני טעינה מהענן");
+      return;
+    }
+
+    if (!projectId) return;
+
+    const { data, error } = await supabase
+      .from("projects")
+      .select("id, name, data")
+      .eq("id", projectId)
+      .single();
+
+    if (error) {
+      alert("טעינת הפרויקט נכשלה: " + error.message);
+      return;
+    }
+
+    const projectData = data.data;
+
+    const normalizedSchoolData = ensureDailyHoursForClasses(
+      projectData.schoolData
+    );
+
+    setSchoolData(normalizedSchoolData);
+    setSchedule(projectData.schedule || {});
+    setTeacherHighlights(
+      projectData.teacherHighlights || createDefaultTeacherHighlights()
+    );
+    setCheckpoints(projectData.checkpoints || []);
+    setCurrentCheckpointId(projectData.currentCheckpointId || "");
+    setComparisonCheckpointId(projectData.comparisonCheckpointId || "");
+
+    setHistory([]);
+    setFuture([]);
+
+    localStorage.setItem("schoolData", JSON.stringify(normalizedSchoolData));
+    localStorage.setItem(
+      "schoolSchedule",
+      JSON.stringify(projectData.schedule || {})
+    );
+    localStorage.setItem(
+      "teacherHighlights",
+      JSON.stringify(
+        projectData.teacherHighlights || createDefaultTeacherHighlights()
+      )
+    );
+    localStorage.setItem("checkpoints", JSON.stringify(projectData.checkpoints || []));
+    localStorage.setItem("currentCheckpointId", projectData.currentCheckpointId || "");
+    localStorage.setItem(
+      "comparisonCheckpointId",
+      projectData.comparisonCheckpointId || ""
+    );
+
+    setSelectedCloudProjectId(projectId);
+    setHasUnsavedCloudChanges(false);
+    setLastCloudSavedAt(new Date().toLocaleTimeString("he-IL"));
+
+    alert(`הפרויקט "${data.name}" נטען מהענן`);
+  }
+
+  async function handleCloudProjectSelection(projectId) {
+    if (!projectId) {
+      setSelectedCloudProjectId("");
+      return;
+    }
+
+    if (hasUnsavedCloudChanges && selectedCloudProjectId) {
+      const shouldSaveFirst = confirm(
+        "יש שינויים שלא נשמרו בענן.\n\nלחץ אישור כדי לשמור את הפרויקט הנוכחי ואז לטעון את הפרויקט שנבחר.\nלחץ ביטול כדי לטעון בלי לשמור."
+      );
+
+      if (shouldSaveFirst) {
+        await updateSelectedCloudProject();
+      }
+    }
+
+    await loadCloudProjectById(projectId);
   }
 
   async function loadCloudProjects() {
@@ -2592,12 +2709,25 @@ export default function App() {
             >
               ישיבות צוות
             </button>
-
+            {selectedCloudProjectId && (
+              <span
+                className={
+                  hasUnsavedCloudChanges
+                    ? "cloud-status-badge cloud-status-unsaved"
+                    : "cloud-status-badge cloud-status-saved"
+                }
+              >
+                {hasUnsavedCloudChanges
+                  ? "☁ לא נשמר"
+                  : `☁ שמור${lastCloudSavedAt ? ` ${lastCloudSavedAt}` : ""}`}
+              </span>
+            )}
           </div>
         )}
         {activeView === "scheduler" && (
           <>
             <div className="top-bar">
+
               <div className="days-bar">
                 {days.map((day) => (
                   <button
@@ -3033,7 +3163,7 @@ export default function App() {
             loadCloudProjects={loadCloudProjects}
             saveProjectToCloud={saveProjectToCloud}
             updateSelectedCloudProject={updateSelectedCloudProject}
-            loadSelectedCloudProject={loadSelectedCloudProject}
+            handleCloudProjectSelection={handleCloudProjectSelection}
             deleteSelectedCloudProject={deleteSelectedCloudProject}
             checkpoints={checkpoints}
             currentCheckpointId={currentCheckpointId}

@@ -1112,3 +1112,23 @@ th {
 .cloud-saved {
   color: #2e7d32;
 }
+
+.cloud-status-badge {
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.cloud-status-unsaved {
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffb74d;
+}
+
+.cloud-status-saved {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #81c784;
+}
