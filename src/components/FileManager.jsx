@@ -90,11 +90,11 @@ export default function FileManager({
             </div>
             <div className="file-actions">
                 <button className="file-action-button" onClick={saveProjectToFile}>
-                    שמור פרויקט
+                    שמור פרוייקט לקובץ
                 </button>
 
                 <label className="file-action-button">
-                    טען פרויקט
+                    טען פרויקט מקובץ
                     <input
                         type="file"
                         accept=".json"
@@ -104,7 +104,7 @@ export default function FileManager({
                 </label>
 
                 <label className="file-action-button">
-                    ייבוא Excel
+                    ייבוא סדין מ-Excel
                     <input
                         type="file"
                         accept=".xlsx,.xlsm,.xls"
