@@ -35,6 +35,8 @@ import TeacherHighlightPanel, {
   createDefaultTeacherHighlights,
 } from "./components/TeacherHighlightPanel";
 import FileManager from "./components/FileManager";
+import AuthPanel from "./components/AuthPanel";
+import { supabase } from "./services/supabaseClient";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -99,13 +101,17 @@ export default function App() {
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [showPanelsMenu, setShowPanelsMenu] = useState(false);
   const [showHelpDialog, setShowHelpDialog] = useState(false);
+  const [user, setUser] = useState(null);
+  const [cloudProjects, setCloudProjects] = useState([]);
+  const [selectedCloudProjectId, setSelectedCloudProjectId] = useState("");
   const [visiblePanels, setVisiblePanels] = useState({
     groups: true,
     warnings: true,
     highlights: true,
     dailyBalance: true,
   });
-
+  const [hasUnsavedCloudChanges, setHasUnsavedCloudChanges] = useState(false);
+  const [lastCloudSavedAt, setLastCloudSavedAt] = useState(null);
   const [checkpoints, setCheckpoints] = useState(() => {
     const saved = localStorage.getItem("checkpoints");
 
@@ -119,6 +125,26 @@ export default function App() {
 
     return [];
   });
+
+  useEffect(() => {
+    async function loadSession() {
+      const { data } = await supabase.auth.getSession();
+      setUser(data.session?.user || null);
+    }
+
+    loadSession();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user || null);
+      }
+    );
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
 
   useEffect(() => {
     localStorage.setItem("checkpoints", JSON.stringify(checkpoints));
@@ -187,6 +213,20 @@ export default function App() {
     return defaultData;
   });
 
+  useEffect(() => {
+    if (selectedCloudProjectId) {
+      setHasUnsavedCloudChanges(true);
+    }
+  }, [
+    schoolData,
+    schedule,
+    teacherHighlights,
+    checkpoints,
+    currentCheckpointId,
+    comparisonCheckpointId,
+  ]);
+
+  
   const {
     teachers,
     classes,
@@ -244,6 +284,226 @@ export default function App() {
       JSON.stringify(teacherHighlights)
     );
   }, [teacherHighlights]);
+
+  useEffect(() => {
+    if (user) {
+      loadCloudProjects();
+    } else {
+      setCloudProjects([]);
+      setSelectedCloudProjectId("");
+    }
+  }, [user]);
+
+
+  useEffect(() => {
+    if (!hasUnsavedCloudChanges || !selectedCloudProjectId || !user) return;
+
+    const timer = setTimeout(() => {
+      autoSaveSelectedCloudProject();
+    }, 30000);
+
+    return () => clearTimeout(timer);
+  }, [
+    hasUnsavedCloudChanges,
+    selectedCloudProjectId,
+    user,
+    schoolData,
+    schedule,
+    teacherHighlights,
+    checkpoints,
+    currentCheckpointId,
+    comparisonCheckpointId,
+  ]);
+
+  function buildProjectData() {
+    return {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      schoolData,
+      schedule,
+      teacherHighlights,
+      checkpoints,
+      currentCheckpointId,
+      comparisonCheckpointId,
+    };
+  }
+
+  async function loadCloudProjects() {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("projects")
+      .select("id, name, updated_at")
+      .order("updated_at", { ascending: false });
+
+    if (error) {
+      alert("טעינת רשימת הפרויקטים נכשלה: " + error.message);
+      return;
+    }
+
+    setCloudProjects(data || []);
+  }
+
+  async function saveProjectToCloud() {
+    if (!user) {
+      alert("יש להתחבר לפני שמירה בענן");
+      return;
+    }
+
+    const name = prompt("שם הפרויקט לשמירה בענן");
+
+    if (!name || !name.trim()) {
+      alert("יש להזין שם פרויקט");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("projects")
+      .insert({
+        user_id: user.id,
+        name: name.trim(),
+        data: buildProjectData(),
+        updated_at: new Date().toISOString(),
+      })
+      .select("id, name, updated_at")
+      .single();
+
+    if (error) {
+      alert("שמירה בענן נכשלה: " + error.message);
+      return;
+    }
+
+    alert("הפרויקט נשמר בענן");
+    setSelectedCloudProjectId(data.id);
+    await loadCloudProjects();
+  }
+
+  async function updateSelectedCloudProject() {
+    if (!user) {
+      alert("יש להתחבר לפני שמירה בענן");
+      return;
+    }
+
+    if (!selectedCloudProjectId) {
+      alert("יש לבחור פרויקט לעדכון");
+      return;
+    }
+    async function autoSaveSelectedCloudProject() {
+      if (!user || !selectedCloudProjectId || !hasUnsavedCloudChanges) return;
+
+      const { error } = await supabase
+        .from("projects")
+        .update({
+          data: buildProjectData(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", selectedCloudProjectId);
+
+      if (error) {
+        console.error("Auto save failed:", error);
+        return;
+      }
+
+      setHasUnsavedCloudChanges(false);
+      setLastCloudSavedAt(new Date().toLocaleTimeString("he-IL"));
+      await loadCloudProjects();
+    }
+    const { error } = await supabase
+      .from("projects")
+      .update({
+        data: buildProjectData(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", selectedCloudProjectId);
+
+    if (error) {
+      alert("עדכון הפרויקט בענן נכשל: " + error.message);
+      return;
+    }
+
+    alert("הפרויקט עודכן בענן");
+    setHasUnsavedCloudChanges(false);
+    setLastCloudSavedAt(new Date().toLocaleTimeString("he-IL"));
+    await loadCloudProjects();
+  }
+
+  async function loadSelectedCloudProject() {
+    if (!user) {
+      alert("יש להתחבר לפני טעינה מהענן");
+      return;
+    }
+
+    if (!selectedCloudProjectId) {
+      alert("יש לבחור פרויקט לטעינה");
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("projects")
+      .select("id, name, data")
+      .eq("id", selectedCloudProjectId)
+      .single();
+
+    if (error) {
+      alert("טעינת הפרויקט נכשלה: " + error.message);
+      return;
+    }
+
+    const projectData = data.data;
+
+    const normalizedSchoolData = ensureDailyHoursForClasses(projectData.schoolData);
+
+    setSchoolData(normalizedSchoolData);
+    setSchedule(projectData.schedule || {});
+    setTeacherHighlights(
+      projectData.teacherHighlights || createDefaultTeacherHighlights()
+    );
+    setCheckpoints(projectData.checkpoints || []);
+    setCurrentCheckpointId(projectData.currentCheckpointId || "");
+    setComparisonCheckpointId(projectData.comparisonCheckpointId || "");
+
+    setHistory([]);
+    setFuture([]);
+
+    localStorage.setItem("schoolData", JSON.stringify(normalizedSchoolData));
+    localStorage.setItem("schoolSchedule", JSON.stringify(projectData.schedule || {}));
+    localStorage.setItem(
+      "teacherHighlights",
+      JSON.stringify(projectData.teacherHighlights || createDefaultTeacherHighlights())
+    );
+    localStorage.setItem("checkpoints", JSON.stringify(projectData.checkpoints || []));
+    localStorage.setItem("currentCheckpointId", projectData.currentCheckpointId || "");
+    localStorage.setItem(
+      "comparisonCheckpointId",
+      projectData.comparisonCheckpointId || ""
+    );
+    setHasUnsavedCloudChanges(false);
+    setLastCloudSavedAt(new Date().toLocaleTimeString("he-IL"));
+    alert(`הפרויקט "${data.name}" נטען מהענן`);
+  }
+
+  async function deleteSelectedCloudProject() {
+    if (!selectedCloudProjectId) {
+      alert("יש לבחור פרויקט למחיקה");
+      return;
+    }
+
+    if (!confirm("למחוק את הפרויקט מהענן?")) return;
+
+    const { error } = await supabase
+      .from("projects")
+      .delete()
+      .eq("id", selectedCloudProjectId);
+
+    if (error) {
+      alert("מחיקת הפרויקט נכשלה: " + error.message);
+      return;
+    }
+
+    setSelectedCloudProjectId("");
+    await loadCloudProjects();
+  }
+
 
   function undo() {
     const currentHistory = historyRef.current;
@@ -412,6 +672,7 @@ export default function App() {
 
     return total;
   }
+
 
   function createCheckpoint() {
     const name = prompt("שם נקודת השמירה");
@@ -2764,11 +3025,23 @@ export default function App() {
             loadProjectFromFile={loadProjectFromFile}
             handleExcelUpload={handleExcelUpload}
             clearProject={clearProject}
+            user={user}
+            setUser={setUser}
+            cloudProjects={cloudProjects}
+            selectedCloudProjectId={selectedCloudProjectId}
+            setSelectedCloudProjectId={setSelectedCloudProjectId}
+            loadCloudProjects={loadCloudProjects}
+            saveProjectToCloud={saveProjectToCloud}
+            updateSelectedCloudProject={updateSelectedCloudProject}
+            loadSelectedCloudProject={loadSelectedCloudProject}
+            deleteSelectedCloudProject={deleteSelectedCloudProject}
             checkpoints={checkpoints}
             currentCheckpointId={currentCheckpointId}
             createCheckpoint={createCheckpoint}
             deleteCheckpoint={deleteCheckpoint}
             restoreCheckpoint={restoreCheckpoint}
+            hasUnsavedCloudChanges={hasUnsavedCloudChanges}
+            lastCloudSavedAt={lastCloudSavedAt}
           />
         )}
 

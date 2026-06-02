@@ -1059,3 +1059,56 @@ th {
   font-size: 13px;
   font-weight: bold;
 }
+
+.auth-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.auth-panel input {
+  padding: 6px;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+}
+
+.cloud-section {
+  margin: 18px 0;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.cloud-section h3 {
+  margin-top: 0;
+}
+
+.cloud-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cloud-actions select {
+  min-width: 220px;
+  padding: 8px;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+}
+
+.cloud-save-status {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+.cloud-unsaved {
+  color: #e65100;
+}
+
+.cloud-saved {
+  color: #2e7d32;
+}

@@ -1,3 +1,5 @@
+import AuthPanel from "./AuthPanel";
+
 export default function FileManager({
     saveProjectToFile,
     loadProjectFromFile,
@@ -8,6 +10,18 @@ export default function FileManager({
     createCheckpoint,
     deleteCheckpoint,
     restoreCheckpoint,
+    user,
+    setUser,
+    cloudProjects,
+    selectedCloudProjectId,
+    setSelectedCloudProjectId,
+    loadCloudProjects,
+    saveProjectToCloud,
+    updateSelectedCloudProject,
+    loadSelectedCloudProject,
+    deleteSelectedCloudProject,
+    hasUnsavedCloudChanges,
+    lastCloudSavedAt,
 }) {
     function formatDate(value) {
         if (!value) return "";
@@ -18,7 +32,70 @@ export default function FileManager({
     return (
         <div className="file-manager">
             <h3>קובץ</h3>
+            <AuthPanel user={user} setUser={setUser} />
+            <div className="cloud-section">
+                <h3>שמירה בענן</h3>
+                <div className="cloud-save-status">
+                    {selectedCloudProjectId ? (
+                        hasUnsavedCloudChanges ? (
+                            <span className="cloud-unsaved">יש שינויים שלא נשמרו בענן</span>
+                        ) : (
+                            <span className="cloud-saved">
+                                שמור בענן{lastCloudSavedAt ? ` — ${lastCloudSavedAt}` : ""}
+                            </span>
+                        )
+                    ) : (
+                        <span>לא נבחר פרויקט ענן</span>
+                    )}
+                </div>
+                <div className="cloud-actions">
+                    <select
+                        value={selectedCloudProjectId}
+                        onChange={(e) => setSelectedCloudProjectId(e.target.value)}
+                        disabled={!user}
+                    >
+                        <option value="">בחר פרויקט בענן</option>
 
+                        {cloudProjects.map((project) => (
+                            <option key={project.id} value={project.id}>
+                                {project.name}
+                            </option>
+                        ))}
+                    </select>
+
+                    <button className="file-action-button" onClick={loadCloudProjects} disabled={!user}>
+                        רענן רשימה
+                    </button>
+
+                    <button className="file-action-button" onClick={saveProjectToCloud} disabled={!user}>
+                        שמור כפרויקט חדש בענן
+                    </button>
+
+                    <button
+                        className="file-action-button"
+                        onClick={updateSelectedCloudProject}
+                        disabled={!user || !selectedCloudProjectId}
+                    >
+                        עדכן פרויקט נבחר
+                    </button>
+
+                    <button
+                        className="file-action-button"
+                        onClick={loadSelectedCloudProject}
+                        disabled={!user || !selectedCloudProjectId}
+                    >
+                        טען פרויקט נבחר
+                    </button>
+
+                    <button
+                        className="file-action-button danger-file-button"
+                        onClick={deleteSelectedCloudProject}
+                        disabled={!user || !selectedCloudProjectId}
+                    >
+                        מחק מהענן
+                    </button>
+                </div>
+            </div>
             <div className="file-actions">
                 <button className="file-action-button" onClick={saveProjectToFile}>
                     שמור פרויקט
