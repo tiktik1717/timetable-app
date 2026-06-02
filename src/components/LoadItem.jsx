@@ -16,6 +16,7 @@ export default function LoadItem({
   onSelectLoadUnit,
   onAssignGroup,
   onHighlightGroup,
+  availableForSelectedCell,
 }) {
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -50,6 +51,16 @@ export default function LoadItem({
   const tooltipText =
     placements.length > 0 ? placements.join(", ") : "אין שיבוצים עדיין";
 
+  function selectUnit() {
+    console.log("select unit", unit.id);
+    setShowTooltip(false);
+    onSelectLoadUnit(unit.id);
+
+    if (unit.constraintGroupId) {
+      onHighlightGroup(unit.constraintGroupId);
+    }
+  }
+
   return (
     <div
       className="load-item-wrapper"
@@ -61,30 +72,16 @@ export default function LoadItem({
         style={style}
         {...listeners}
         {...attributes}
-        onMouseDown={() => {
-          setShowTooltip(false);
-          onSelectLoadUnit(unit.id);
-
-          if (unit.constraintGroupId) {
-            onHighlightGroup(unit.constraintGroupId);
-          }
-        }}
+        onMouseDown={selectUnit}
         onClick={(event) => {
           event.stopPropagation();
-
-          setShowTooltip(false);
-          onSelectLoadUnit(unit.id);
-
-          if (unit.constraintGroupId) {
-            onHighlightGroup(unit.constraintGroupId);
-          }
+          selectUnit();
         }}
         onContextMenu={(event) => {
           event.preventDefault();
           setShowTooltip(false);
           onAssignGroup(unit);
         }}
-
         className={[
           "load-item",
           remaining <= 0 ? "load-item-empty" : "",
@@ -92,20 +89,14 @@ export default function LoadItem({
           highlightedGroup ? "group-highlight" : "",
           teacherHighlight ? "teacher-search-highlight" : "",
           selectedLoadUnitId === unit.id ? "selected-load-item" : "",
+          availableForSelectedCell ? "available-for-selected-cell" : "",
         ].join(" ")}
       >
         <span className="load-teacher-code">{label}</span>
-        <span className="load-count">
-          {" "}
-          ({remaining}/{unit.hours})
-        </span>
+        <span className="load-count"> ({remaining}/{unit.hours})</span>
       </div>
 
-      {showTooltip && (
-        <div className="load-tooltip">
-          {tooltipText}
-        </div>
-      )}
+      {showTooltip && <div className="load-tooltip">{tooltipText}</div>}
     </div>
   );
 }

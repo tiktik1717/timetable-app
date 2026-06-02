@@ -16,6 +16,7 @@ export default function DroppableCell({
   blocked,
   teacherHighlightsByUnit,
   placementHint,
+  activeTeacherHere,
 }) {
   const cellId = `${className}-${hour}`;
 
@@ -65,6 +66,8 @@ export default function DroppableCell({
         blocked ? "blocked-cell" : "",
         placementHint === "available" ? "placement-available" : "",
         placementHint === "busy" ? "placement-busy" : "",
+        placementHint === "teacherBlocked" ? "placement-teacher-blocked" : "",
+        activeTeacherHere ? "active-teacher-cell" : "",
       ].join(" ")}
       onMouseDown={onClick}
     >

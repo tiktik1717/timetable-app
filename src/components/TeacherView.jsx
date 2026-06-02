@@ -11,7 +11,15 @@ export default function TeacherView({
     comparisonCheckpointId,
     setComparisonCheckpointId,
     isTeacherCellChanged,
+    setSchoolData,
+    isTeacherFreeDay,
+    isTeacherBlockedHour,
+    removeTeacherFromSpecificTime,
 }) {
+    const selectedTeacher = teachers.find(
+        (teacher) => teacher.id === selectedTeacherForView
+    );
+
     function getTeacherLessons(day, hour) {
         const lessons = [];
 
@@ -34,6 +42,46 @@ export default function TeacherView({
         }
 
         return lessons;
+    }
+
+    function toggleBlockedHour(day, hour) {
+        if (!selectedTeacherForView) return;
+
+        if (isTeacherFreeDay(selectedTeacherForView, day)) {
+            return;
+        }
+        const wasBlocked = isTeacherBlockedHour(selectedTeacherForView, day, hour);
+        setSchoolData((prev) => ({
+            ...prev,
+            teachers: prev.teachers.map((teacher) => {
+                if (teacher.id !== selectedTeacherForView) return teacher;
+
+                const blockedHours = { ...(teacher.blockedHours || {}) };
+                const dayHours = blockedHours[day] || [];
+
+                const hourNumber = Number(hour);
+
+                blockedHours[day] = dayHours.includes(hourNumber)
+                    ? dayHours.filter((h) => h !== hourNumber)
+                    : [...dayHours, hourNumber].sort((a, b) => a - b);
+
+                return {
+                    ...teacher,
+                    blockedHours,
+                };
+            }),
+        }));
+        if (!wasBlocked) {
+            const removedCount = removeTeacherFromSpecificTime(
+                selectedTeacherForView,
+                day,
+                hour
+            );
+
+            if (removedCount > 0) {
+                alert(`המורה הוסר/ה מ-${removedCount} שיבוץ/ים מפני שהשעה נחסמה.`);
+            }
+        }
     }
 
     const maxHoursForAllClasses = Math.max(
@@ -87,12 +135,25 @@ export default function TeacherView({
                 </label>
             </div>
 
+            <div className="teacher-view-note">
+                לחיצה על תא פנוי מסמנת/מבטלת שעה חסומה למורה. ימים חופשיים מנוהלים במסך ניהול מורים בלבד.
+            </div>
+
             <table className="teacher-view-table">
                 <thead>
                     <tr>
                         <th>שעה</th>
                         {days.map((day) => (
-                            <th key={day}>יום {day}</th>
+                            <th
+                                key={day}
+                                className={
+                                    isTeacherFreeDay(selectedTeacherForView, day)
+                                        ? "teacher-free-day-header"
+                                        : ""
+                                }
+                            >
+                                יום {day}
+                            </th>
                         ))}
                     </tr>
                 </thead>
@@ -104,6 +165,12 @@ export default function TeacherView({
 
                             {days.map((day) => {
                                 const lessons = getTeacherLessons(day, hour);
+                                const isFreeDay = isTeacherFreeDay(selectedTeacherForView, day);
+                                const isBlocked = isTeacherBlockedHour(
+                                    selectedTeacherForView,
+                                    day,
+                                    hour
+                                );
 
                                 const changed = isTeacherCellChanged?.(
                                     selectedTeacherForView,
@@ -117,7 +184,17 @@ export default function TeacherView({
                                         className={[
                                             "teacher-view-cell",
                                             changed ? "changed-cell" : "",
+                                            isFreeDay ? "teacher-free-day-cell" : "",
+                                            isBlocked ? "teacher-blocked-hour-cell" : "",
                                         ].join(" ")}
+                                        onClick={() => toggleBlockedHour(day, hour)}
+                                        title={
+                                            isFreeDay
+                                                ? "יום חופשי — ניתן לשינוי במסך ניהול מורים"
+                                                : isBlocked
+                                                    ? "שעה חסומה — לחץ לביטול"
+                                                    : "לחץ כדי לחסום שעה זו"
+                                        }
                                     >
                                         {lessons.map((lesson, index) => (
                                             <div key={index}>{lesson}</div>
