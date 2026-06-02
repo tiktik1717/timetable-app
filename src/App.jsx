@@ -821,6 +821,49 @@ export default function App() {
     setCurrentCheckpointId(newCheckpoint.id);
     setComparisonCheckpointId(getPreviousCheckpointId(newCheckpoint.id, [newCheckpoint, ...checkpoints]));
   }
+  function getActivePlacementTeacherId() {
+    if (!selectedLoadUnitId) return null;
+
+    const unit = getUnitById(selectedLoadUnitId);
+
+    return unit?.teacherId || null;
+  }
+
+  function isTeacherBusyAt(teacherId, day, hour) {
+    for (const className of classes) {
+      const unitIds = getCellUnitIds(day, className, hour);
+
+      for (const unitId of unitIds) {
+        const unit = getUnitById(unitId);
+
+        if (unit?.teacherId === teacherId) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  function getPlacementHint(className, day, hour) {
+    const teacherId = getActivePlacementTeacherId();
+
+    if (!teacherId) return null;
+
+    if (isBlockedCell(className, day, hour)) {
+      return null;
+    }
+
+    if (isTeacherFreeDay(teacherId, day)) {
+      return null;
+    }
+
+    if (isTeacherBusyAt(teacherId, day, hour)) {
+      return "busy";
+    }
+
+    return "available";
+  }
 
   function getPreviousCheckpointId(checkpointId, checkpointList = checkpoints) {
     const sorted = [...checkpointList].sort(
@@ -2827,6 +2870,14 @@ export default function App() {
                       />
                       יתרת יום
                     </label>
+                    {selectedLoadUnitId && (
+                      <button
+                        className="mini-button"
+                        onClick={() => setSelectedLoadUnitId(null)}
+                      >
+                        נקה מורה פעיל
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -3023,6 +3074,7 @@ export default function App() {
                           );
 
                           const blocked = isBlockedCell(className, selectedDay, hour);
+                          const placementHint = getPlacementHint(className, selectedDay, hour);
 
                           return (
                             <DroppableCell
@@ -3038,6 +3090,7 @@ export default function App() {
                               blocked={blocked}
                               highlighted={highlighted}
                               displayMode={displayMode}
+                              placementHint={placementHint}
                               teacherHighlightsByUnit={teacherHighlightsByUnit}
                               onClick={() => {
                                 setSelectedCell({

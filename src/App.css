@@ -1132,3 +1132,11 @@ th {
   color: #2e7d32;
   border: 1px solid #81c784;
 }
+
+.placement-available {
+  background: #c8e6c9 !important;
+}
+
+.placement-busy {
+  background: #ffcdd2 !important;
+}
