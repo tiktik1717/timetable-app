@@ -53,6 +53,7 @@ td {
   text-align: center;
   font-size: 11px;
   padding: 0;
+  height: calc(30px + var(--row-height-offset, 0px));
 }
 
 th {
@@ -114,6 +115,7 @@ th {
   white-space: nowrap;
   cursor: grab;
   margin: 2px;
+  min-height: calc(20px + var(--row-height-offset, 0px));
 }
 
 .cell-teacher {
@@ -133,6 +135,7 @@ th {
   overflow: hidden;
   padding: 0 2px;
   border-radius: 3px;
+  min-height: calc(20px + var(--row-height-offset, 0px));
 }
 
 
@@ -1180,4 +1183,42 @@ th {
 
 .placement-teacher-blocked {
   background: #bdbdbd !important;
+}
+
+.view-slider-control {
+  border-top: 1px solid #ddd;
+  padding-top: 8px;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.view-slider-control input[type="range"] {
+  width: 160px;
+}
+
+.table-scroll-wrapper table td,
+.table-scroll-wrapper table th {
+  padding-top: max(1px, calc(4px + var(--row-height-offset, 0px) / 4));
+  padding-bottom: max(1px, calc(4px + var(--row-height-offset, 0px) / 4));
+}
+
+.cell-teacher,
+.load-item {
+  min-height: max(14px, calc(20px + var(--row-height-offset, 0px)));
+  line-height: 1.1;
+  padding-top: max(1px, calc(2px + var(--row-height-offset, 0px) / 4));
+  padding-bottom: max(1px, calc(2px + var(--row-height-offset, 0px) / 4));
+}
+
+.help-list {
+  text-align: right;
+  padding-right: 20px;
+  line-height: 1.8;
+}
+
+.help-list li {
+  margin-bottom: 4px;
 }

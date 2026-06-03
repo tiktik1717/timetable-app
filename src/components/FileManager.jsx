@@ -22,6 +22,7 @@ export default function FileManager({
     deleteSelectedCloudProject,
     hasUnsavedCloudChanges,
     lastCloudSavedAt,
+    setShowHelpDialog,
 }) {
     function formatDate(value) {
         if (!value) return "";
@@ -176,6 +177,19 @@ export default function FileManager({
                     </table>
                 )}
             </div>
+            <div>
+                <p>
+                    -----------------------------------------------------
+                </p>
+                <button
+                    type="button"
+                    className="file-action-button"
+                    onClick={() => setShowHelpDialog(true)}
+                >
+                    עזרה
+                </button>
+            </div>
         </div>
+
     );
 }

@@ -105,6 +105,9 @@ export default function App() {
   const [cloudProjects, setCloudProjects] = useState([]);
   const [draggedTeacherId, setDraggedTeacherId] = useState(null);
   const [draggedClassName, setDraggedClassName] = useState(null);
+  const [rowHeightOffset, setRowHeightOffset] = useState(() => {
+    return Number(localStorage.getItem("rowHeightOffset")) || 0;
+  });
   const [visiblePanels, setVisiblePanels] = useState({
     groups: true,
     warnings: true,
@@ -149,6 +152,11 @@ export default function App() {
   const [selectedCloudProjectId, setSelectedCloudProjectId] = useState(() => {
     return localStorage.getItem("selectedCloudProjectId") || "";
   });
+
+
+  useEffect(() => {
+    localStorage.setItem("rowHeightOffset", String(rowHeightOffset));
+  }, [rowHeightOffset]);
 
   useEffect(() => {
     localStorage.setItem(
@@ -1081,7 +1089,9 @@ export default function App() {
 
     if (getRemainingUnitHours(unit.id) <= 0) return false;
 
-    if (!canTeacherWorkAt(unit.teacherId, selectedDay, selectedCell.hou)) return false;
+    if (!canTeacherWorkAt(unit.teacherId, selectedDay, selectedCell.hour)) {
+      return false;
+    }
 
     const teacherBusy = isTeacherBusyAt(
       unit.teacherId,
@@ -2830,8 +2840,13 @@ export default function App() {
     >
 
 
-      <div className={isFocusMode ? "container focus-mode" : "container"}>
-        {!isFocusMode && <h1>מערכת שעות - אב טיפוס</h1>}
+      <div
+        className={isFocusMode ? "container focus-mode" : "container"}
+        style={{
+          "--row-height-offset": `${rowHeightOffset}px`,
+        }}
+      >
+        {!isFocusMode && <h1>מערכת שעות - ממ"ד אריאל</h1>}
         {!isFocusMode && (
           <div className="view-tabs">
             <button
@@ -3010,6 +3025,20 @@ export default function App() {
                       />
                       יתרת יום
                     </label>
+                    <div className="view-slider-control">
+                      <label>
+                        גובה שורות: {rowHeightOffset > 0 ? `+${rowHeightOffset}` : rowHeightOffset}px
+                      </label>
+
+                      <input
+                        type="range"
+                        min="-8"
+                        max="20"
+                        step="1"
+                        value={rowHeightOffset}
+                        onChange={(e) => setRowHeightOffset(Number(e.target.value))}
+                      />
+                    </div>
                     {selectedLoadUnitId && (
                       <button
                         className="mini-button"
@@ -3258,11 +3287,6 @@ export default function App() {
                 </tbody>
               </table>
             </div>
-            <p className="hint">
-              Delete מוחק תא מסומן. גרירה למחסן מוחקת שיבוץ. Ctrl + גרירה מתא לתא
-              מבצע החלפה.
-            </p>
-
           </>
         )}
 
@@ -3377,6 +3401,7 @@ export default function App() {
             restoreCheckpoint={restoreCheckpoint}
             hasUnsavedCloudChanges={hasUnsavedCloudChanges}
             lastCloudSavedAt={lastCloudSavedAt}
+            setShowHelpDialog={setShowHelpDialog}
           />
         )}
 
