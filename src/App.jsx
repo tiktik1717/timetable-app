@@ -80,7 +80,7 @@ export default function App() {
 
 
   const panelsMenuRef = useRef(null);
-
+  const [dragSource, setDragSource] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
   const [ctrlPressed, setCtrlPressed] = useState(false);
   const [shiftPressed, setShiftPressed] = useState(false);
@@ -790,6 +790,10 @@ export default function App() {
     if (units.length === 0 || !activeUnit) return null;
 
     let hasGroupProblem = false;
+    const ignoredUnitIds =
+      dragSource === "cell" && activePlacementUnitId
+        ? [activePlacementUnitId]
+        : [];
 
     for (const unit of units) {
       const isActiveUnit = unit.id === activeUnit.id;
@@ -813,6 +817,20 @@ export default function App() {
         }
 
         hasGroupProblem = true;
+        continue;
+      }
+
+      if (
+        violatesConstraintRules(unit, day, unit.className, hour, {
+          ignoredUnitIds,
+        })
+      ) {
+        if (isActiveUnit) {
+          return "busy";
+        }
+
+        hasGroupProblem = true;
+        continue;
       }
     }
 
@@ -1389,7 +1407,10 @@ export default function App() {
         hour
       ).includes(candidate.id);
 
-      return !alreadyInTarget && !canPlaceUnitAt(candidate, selectedDay, toHour);
+      return (
+        !alreadyInTarget &&
+        !canUnitFillCell(candidate, selectedDay, candidate.className, hour)
+      );
     });
 
     if (invalidUnits.length > 0) {
@@ -1399,6 +1420,60 @@ export default function App() {
 
     placeUnitsByClassAtHour(unitsToPlace, String(hour), false);
   }
+
+  function hasRule(group, ruleName) {
+    return group?.rules?.includes(ruleName) || group?.type === ruleName;
+  }
+
+  function violatesConstraintRules(unit, day, className, hour, options = {}) {
+    const ignoredUnitIds = new Set(options.ignoredUnitIds || []);
+
+    if (!unit?.constraintGroupId) return false;
+
+    const group = getConstraintGroupById(unit.constraintGroupId);
+
+    if (!group) return false;
+
+    // אסור באותה שורה: לא עוד יחידה מאותה קבוצה באותה כיתה באותו יום
+    if (hasRule(group, "notSameDaySameClass")) {
+      const classHours = getClassHoursForDay(className, day);
+
+      for (let currentHour = 1; currentHour <= classHours; currentHour++) {
+        const unitIds = getCellUnitIds(day, className, currentHour);
+
+        for (const unitId of unitIds) {
+          if (ignoredUnitIds.has(unitId)) continue;
+
+          const scheduledUnit = getUnitById(unitId);
+
+          if (scheduledUnit?.constraintGroupId === unit.constraintGroupId) {
+            return true;
+          }
+        }
+      }
+    }
+
+    // אסור באותו טור: לא עוד יחידה מאותה קבוצה באותה שעה בכיתה אחרת/אותה כיתה
+    if (hasRule(group, "notSameTime")) {
+      for (const currentClassName of classes) {
+        const unitIds = getCellUnitIds(day, currentClassName, hour);
+
+        for (const unitId of unitIds) {
+          if (ignoredUnitIds.has(unitId)) continue;
+
+          const scheduledUnit = getUnitById(unitId);
+
+          if (scheduledUnit?.constraintGroupId === unit.constraintGroupId) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
+  }
+
+
 
   function getDailyBalanceColor(className, day) {
     const remaining = getRemainingHoursForClassInDay(className, day);
@@ -1424,21 +1499,12 @@ export default function App() {
   function isUnitAvailableForSelectedCell(unit) {
     if (!selectedCell) return false;
 
-    if (unit.className !== selectedCell.className) return false;
-
-    if (getRemainingUnitHours(unit.id) <= 0) return false;
-
-    if (!canTeacherWorkAt(unit.teacherId, selectedDay, selectedCell.hour)) {
-      return false;
-    }
-
-    const teacherBusy = isTeacherBusyAt(
-      unit.teacherId,
+    return canUnitFillCell(
+      unit,
       selectedDay,
+      selectedCell.className,
       selectedCell.hour
     );
-
-    return !teacherBusy;
   }
 
   async function loadProjectFromFile(event) {
@@ -2517,20 +2583,25 @@ export default function App() {
     );
   }
 
-  function canUnitFillCell(unit, day, className, hour) {
+  function canUnitFillCell(unit, day, className, hour, options = {}) {
     if (!unit) return false;
 
     if (unit.className !== className) return false;
 
-    if (getRemainingUnitHours(unit.id) <= 0) return false;
+    if (getRemainingUnitHours(unit.id) <= 0 && !options.allowAlreadyScheduledUnit) {
+      return false;
+    }
 
     if (!canTeacherWorkAt(unit.teacherId, day, hour)) return false;
 
     if (isTeacherBusyAt(unit.teacherId, day, hour)) return false;
 
+    if (violatesConstraintRules(unit, day, className, hour, options)) {
+      return false;
+    }
+
     return true;
   }
-
   function isPurpleHoleCell(day, className, hour) {
     if (isBlockedCell(className, day, hour)) return false;
 
@@ -3243,7 +3314,7 @@ export default function App() {
 
         return (
           !alreadyInTarget &&
-          !canTeacherWorkAt(candidate.teacherId, selectedDay, toHour)
+          !canUnitFillCell(candidate, selectedDay, candidate.className, toHour)
         );
       });
 
@@ -3358,6 +3429,7 @@ export default function App() {
         }
 
         if (data?.source === "cell") {
+          setDragSource("cell");
           setDragOriginCell({
             className: data.fromClass,
             hour: String(data.fromHour),
@@ -3400,6 +3472,7 @@ export default function App() {
       }}
 
       onDragEnd={(event) => {
+        setDragSource(null);
         const data = event.active.data.current;
 
         setHoveredCell(null);
@@ -3418,6 +3491,7 @@ export default function App() {
       }}
 
       onDragCancel={() => {
+        setDragSource(null);
         setHoveredCell(null);
         setSingleDragUnitId(null);
         setDraggedTeacherId(null);
