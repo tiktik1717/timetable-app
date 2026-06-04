@@ -15,6 +15,7 @@ export default function TeacherView({
     isTeacherFreeDay,
     isTeacherBlockedHour,
     removeTeacherFromSpecificTime,
+    requestPurpleHoleCheck,
 }) {
     const selectedTeacher = teachers.find(
         (teacher) => teacher.id === selectedTeacherForView
@@ -72,6 +73,7 @@ export default function TeacherView({
             }),
         }));
         if (!wasBlocked) {
+            requestPurpleHoleCheck();
             const result = removeTeacherFromSpecificTime(
                 selectedTeacherForView,
                 day,

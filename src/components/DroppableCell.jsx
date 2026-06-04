@@ -20,6 +20,9 @@ export default function DroppableCell({
   locked,
   onToggleLock,
   availableScheduledUnitsForSelectedCell,
+  purpleHole,
+  difficultyCount,
+  difficultyLevel,
 }) {
   const cellId = `${className}-${hour}`;
 
@@ -74,6 +77,8 @@ export default function DroppableCell({
         placementHint === "groupBlocked" ? "placement-group-blocked" : "",
         activeTeacherHere ? "active-teacher-cell" : "",
         locked ? "locked-cell" : "",
+        purpleHole ? "purple-hole-cell" : "",
+        difficultyLevel ? `difficulty-cell difficulty-${difficultyLevel}` : "",
       ].join(" ")}
       onMouseDown={onClick}
       onContextMenu={(event) => {
@@ -84,6 +89,13 @@ export default function DroppableCell({
       }}
     >
 
+      {
+        units.length === 0 && difficultyCount !== null && (
+          <div className="difficulty-number">
+            {difficultyCount}
+          </div>
+        )
+      }
       {!blocked && units.length > 0 && (
         <div
           ref={setDraggableRef}

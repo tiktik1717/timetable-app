@@ -1146,15 +1146,6 @@ th {
   border: 1px solid #81c784;
 }
 
-.placement-available {
-  background: #c8e6c9 !important;
-}
-
-.placement-busy {
-  background: #ffcdd2 !important;
-}
-
-
 .active-teacher-cell {
   outline: 3px solid #d32f2f !important;
   outline-offset: -3px;
@@ -1190,10 +1181,6 @@ th {
 
 .teacher-view-cell {
   cursor: pointer;
-}
-
-.placement-teacher-blocked {
-  background: #bdbdbd !important;
 }
 
 .view-slider-control {
@@ -1233,25 +1220,6 @@ th {
 .help-list li {
   margin-bottom: 4px;
 }
-
-.placement-group-busy {
-  background: #ffcc80 !important;
-}
-
-.placement-group-blocked {
-  background: #bdbdbd !important;
-}
-
-
-.placement-teacher-blocked,
-.placement-group-blocked {
-  background: #bdbdbd !important;
-}
-
-.placement-group-busy {
-  background: #ffcc80 !important;
-}
-
 
 html,
 body,
@@ -1293,4 +1261,86 @@ body {
 .locked-cell .cell-teacher {
   box-shadow: inset 0 0 0 2px #000;
   padding-inline: 5px;
+}
+
+.purple-hole-cell {
+  background: #6a1b9a !important;
+  box-shadow: inset 0 0 0 3px #4a0072;
+}
+
+.difficulty-cell {
+  background-image: repeating-linear-gradient(45deg,
+      rgba(255, 255, 255, 0.35) 0,
+      rgba(255, 255, 255, 0.35) 5px,
+      transparent 5px,
+      transparent 10px) !important;
+  font-weight: 800;
+}
+
+.difficulty-zero {
+  background-color: #6a1b9a !important;
+  color: white;
+}
+
+.difficulty-one {
+  background-color: #ef5350 !important;
+  color: white;
+}
+
+.difficulty-two {
+  background-color: #fb8c00 !important;
+  color: #111;
+}
+
+.difficulty-three {
+  background-color: #fdd835 !important;
+  color: #111;
+}
+
+.difficulty-medium {
+  background-color: #9ccc65 !important;
+  color: #111;
+}
+
+.difficulty-easy {
+  background-color: #43a047 !important;
+  color: white;
+}
+
+.difficulty-number {
+  font-weight: 900;
+  font-size: 14px;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.placement-available {
+  background: #c8e6c9 !important;
+}
+
+.placement-busy {
+  background: #ffcdd2 !important;
+}
+
+.placement-teacher-blocked {
+  background: #bdbdbd !important;
+}
+
+
+.placement-group-busy {
+  background: #ffcc80 !important;
+}
+
+.placement-group-blocked {
+  background: #bdbdbd !important;
+}
+
+
+.placement-teacher-blocked,
+.placement-group-blocked {
+  background: #bdbdbd !important;
+}
+
+.placement-group-busy {
+  background: #ffcc80 !important;
 }

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+
 import { DndContext } from "@dnd-kit/core";
 import {
   readExcelFile,
@@ -107,6 +108,7 @@ export default function App() {
   const [draggedClassName, setDraggedClassName] = useState(null);
   const [activePlacementUnitId, setActivePlacementUnitId] = useState(null);
   const [dragOriginCell, setDragOriginCell] = useState(null);
+  const pendingPurpleHoleCheckRef = useRef(null);
   const [rowHeightOffset, setRowHeightOffset] = useState(() => {
     return Number(localStorage.getItem("rowHeightOffset")) || 0;
   });
@@ -115,6 +117,8 @@ export default function App() {
     warnings: true,
     highlights: true,
     dailyBalance: true,
+    purpleHoleAlerts: true,
+    difficultyHints: false,
   });
   const [hasUnsavedCloudChanges, setHasUnsavedCloudChanges] = useState(false);
   const [lastCloudSavedAt, setLastCloudSavedAt] = useState(null);
@@ -346,7 +350,6 @@ export default function App() {
     if (!user || !selectedCloudProjectId || !hasUnsavedCloudChanges) return;
 
     const timer = setTimeout(async () => {
-      console.log("auto saving to cloud...");
       const { error } = await supabase
         .from("projects")
         .update({
@@ -377,6 +380,18 @@ export default function App() {
     currentCheckpointId,
     comparisonCheckpointId,
   ]);
+
+  useEffect(() => {
+    const pending = pendingPurpleHoleCheckRef.current;
+
+    if (!pending) return;
+
+    pendingPurpleHoleCheckRef.current = null;
+
+    const afterHoles = getPurpleHolesForAllDaysFromSchedule(schedule);
+
+    alertNewPurpleHoles(pending.beforeHoles, afterHoles);
+  }, [schedule, schoolData]);
 
   function buildProjectData() {
     return {
@@ -678,6 +693,12 @@ export default function App() {
     return unitIds.some((unitId) =>
       isUnitLocked(day, className, hour, unitId)
     );
+  }
+
+  function requestPurpleHoleCheck() {
+    pendingPurpleHoleCheckRef.current = {
+      beforeHoles: getPurpleHolesForAllDaysFromSchedule(schedule),
+    };
   }
 
   function toggleCellLock(day, className, hour) {
@@ -1038,6 +1059,37 @@ export default function App() {
     return currentValue !== checkpointValue;
   }
 
+  function getDifficultyCount(className, day, hour) {
+    if (isBlockedCell(className, day, hour)) return null;
+
+    const unitIds = getCellUnitIds(day, className, hour);
+
+    // דרגת קושי מוצגת רק בתאים ריקים
+    if (unitIds.length > 0) return null;
+
+    let count = 0;
+
+    for (const unit of teachingUnits) {
+      if (canUnitFillCell(unit, day, className, hour)) {
+        count++;
+      }
+    }
+
+    return count;
+  }
+
+  function getDifficultyLevel(count) {
+    if (count === null || count === undefined) return null;
+
+    if (count === 0) return "zero";
+    if (count === 1) return "one";
+    if (count === 2) return "two";
+    if (count === 3) return "three";
+    if (count <= 5) return "medium";
+
+    return "easy";
+  }
+
   function getBalanceTextColor(backgroundColor) {
     const color = backgroundColor.replace("#", "");
 
@@ -1313,7 +1365,6 @@ export default function App() {
   }
 
   function quickPlaceSelectedLoadUnit(hour) {
-    //console.log("quick place", selectedLoadUnitId, hour);
     if (!selectedLoadUnitId) return;
 
     const unit = getUnitById(selectedLoadUnitId);
@@ -1645,7 +1696,93 @@ export default function App() {
     }
   }
 
+  function getPurpleHoleKey(hole) {
+    return `${hole.day}|${hole.className}|${hole.hour}`;
+  }
+
+  function getPurpleHolesForDayFromSchedule(scheduleObject, dayToCheck) {
+    const holes = [];
+
+    for (const className of classes) {
+      const classHours = getClassHoursForDay(className, dayToCheck);
+
+      for (let hour = 1; hour <= classHours; hour++) {
+        if (isPurpleHoleCellInSchedule(scheduleObject, dayToCheck, className, hour)) {
+          holes.push({
+            day: dayToCheck,
+            className,
+            hour,
+          });
+        }
+      }
+    }
+
+    return holes;
+  }
+
+  function isPurpleHoleCellInSchedule(scheduleObject, day, className, hour) {
+    if (isBlockedCell(className, day, hour)) return false;
+
+    const unitIds = getCellUnitIdsFromSchedule(
+      scheduleObject,
+      day,
+      className,
+      hour
+    );
+
+    if (unitIds.length > 0) return false;
+
+    return !teachingUnits.some((unit) =>
+      canUnitFillCellInSchedule(unit, scheduleObject, day, className, hour)
+    );
+  }
+
+  function canUnitFillCellInSchedule(unit, scheduleObject, day, className, hour) {
+    if (!unit) return false;
+
+    if (unit.className !== className) return false;
+
+    if (getRemainingUnitHours(unit.id, scheduleObject) <= 0) return false;
+
+    if (!canTeacherWorkAt(unit.teacherId, day, hour)) return false;
+
+    if (
+      isTeacherBusyAtInSchedule(
+        unit.teacherId,
+        day,
+        hour,
+        scheduleObject
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  function isTeacherBusyAtInSchedule(teacherId, day, hour, scheduleObject) {
+    for (const className of classes) {
+      const unitIds = getCellUnitIdsFromSchedule(
+        scheduleObject,
+        day,
+        className,
+        hour
+      );
+
+      for (const unitId of unitIds) {
+        const unit = getUnitById(unitId);
+
+        if (unit?.teacherId === teacherId) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   function updateSadinRows(nextRows) {
+    requestPurpleHoleCheck();
     const nextUnits = buildTeachingUnitsFromSheetRows(nextRows);
     const nextTeachingLoads = buildTeachingLoadsFromUnits(nextUnits, classes);
 
@@ -1658,6 +1795,7 @@ export default function App() {
     }));
 
     trimScheduleToUnitHours(nextUnits);
+
   }
 
   function getVisibleHoursForSelectedDay() {
@@ -2198,13 +2336,20 @@ export default function App() {
     return unit.constraintGroupId;
   }
 
-  function countScheduledUnitHours(unitId) {
+  function countScheduledUnitHours(unitId, scheduleObject = schedule) {
     let count = 0;
 
     for (const day of days) {
       for (const className of classes) {
         for (const hour of hours) {
-          if (getCellUnitIds(day, className, hour).includes(unitId)) {
+          const unitIds = getCellUnitIdsFromSchedule(
+            scheduleObject,
+            day,
+            className,
+            hour
+          );
+
+          if (unitIds.includes(unitId)) {
             count++;
           }
         }
@@ -2214,12 +2359,12 @@ export default function App() {
     return count;
   }
 
-  function getRemainingUnitHours(unitId) {
+  function getRemainingUnitHours(unitId, scheduleObject = schedule) {
     const unit = getUnitById(unitId);
 
     if (!unit) return 0;
 
-    return unit.hours - countScheduledUnitHours(unitId);
+    return unit.hours - countScheduledUnitHours(unitId, scheduleObject);
   }
 
   function getCellUnitIds(day, className, hour) {
@@ -2370,6 +2515,76 @@ export default function App() {
     return teacher.freeDays?.some(
       (freeDay) => normalizeDay(freeDay) === currentDay
     );
+  }
+
+  function canUnitFillCell(unit, day, className, hour) {
+    if (!unit) return false;
+
+    if (unit.className !== className) return false;
+
+    if (getRemainingUnitHours(unit.id) <= 0) return false;
+
+    if (!canTeacherWorkAt(unit.teacherId, day, hour)) return false;
+
+    if (isTeacherBusyAt(unit.teacherId, day, hour)) return false;
+
+    return true;
+  }
+
+  function isPurpleHoleCell(day, className, hour) {
+    if (isBlockedCell(className, day, hour)) return false;
+
+    const unitIds = getCellUnitIds(day, className, hour);
+
+    if (unitIds.length > 0) return false;
+
+    return !teachingUnits.some((unit) =>
+      canUnitFillCell(unit, day, className, hour)
+    );
+  }
+
+  function getPurpleHoles(dayToCheck = selectedDay) {
+    const holes = [];
+
+    for (const className of classes) {
+      const classHours = getClassHoursForDay(className, dayToCheck);
+
+      for (let hour = 1; hour <= classHours; hour++) {
+        if (isPurpleHoleCell(dayToCheck, className, hour)) {
+          holes.push({
+            day: dayToCheck,
+            className,
+            hour,
+          });
+        }
+      }
+    }
+
+    return holes;
+  }
+
+
+  function alertNewPurpleHoles(beforeHoles, afterHoles) {
+    console.log("purple alert check", {
+      enabled: visiblePanels.purpleHoleAlerts,
+      beforeHoles,
+      afterHoles,
+    });
+    if (!visiblePanels.purpleHoleAlerts) return;
+
+    const beforeKeys = new Set(beforeHoles.map(getPurpleHoleKey));
+
+    const newHoles = afterHoles.filter(
+      (hole) => !beforeKeys.has(getPurpleHoleKey(hole))
+    );
+
+    if (newHoles.length === 0) return;
+
+    const text = newHoles
+      .map((hole) => `יום ${hole.day}, כיתה ${hole.className}, שעה ${hole.hour}`)
+      .join("\n");
+
+    alert(`נוצרו חורים סגולים חדשים:\n\n${text}`);
   }
 
   function isScheduledUnitMovableToSelectedCell(unit, sourceClassName, sourceHour) {
@@ -2906,27 +3121,40 @@ export default function App() {
 
   function handleDragEnd(event) {
     const { active, over } = event;
+
     if (!over) return;
+
     if (active.id === over.id) {
       return;
     }
 
     const data = active.data.current;
     const overData = over.data.current;
+
     if (data?.source === "load" && !overData) {
       return;
     }
+
+    // החזרה למחסן
     if (data?.source === "cell" && overData?.source === "loadCell") {
       if (data.fromClass !== overData.className) {
         alert("אפשר להחזיר מורה רק למחסן של אותה כיתה");
         return;
       }
 
+      const beforePurpleHoles = getPurpleHolesForDayFromSchedule(
+        schedule,
+        selectedDay
+      );
+
+      requestPurpleHoleCheck();
       removeTeacherFromCell(data.fromClass, data.fromHour);
+
       return;
     }
 
     const [toClass, toHour] = over.id.split("-");
+
     if (isCellLocked(selectedDay, toClass, toHour)) {
       alert("לא ניתן לשבץ או להחליף תא נעול");
       return;
@@ -2936,6 +3164,13 @@ export default function App() {
       alert("לא ניתן לשבץ בשעה שאינה קיימת בכיתה זו ביום זה");
       return;
     }
+
+    const beforePurpleHoles = getPurpleHolesForDayFromSchedule(
+      schedule,
+      selectedDay
+    );
+
+    // גרירה מתוך הטבלה
     if (data?.source === "cell") {
       const draggedUnitIds = singleDragUnitId
         ? [singleDragUnitId]
@@ -2945,7 +3180,9 @@ export default function App() {
         .map(getUnitById)
         .find((unit) => unit && isSameTimeGroup(unit));
 
+
       if (sameTimeUnit) {
+        requestPurpleHoleCheck();
         moveSameTimeGroup(
           data.fromHour,
           toHour,
@@ -2956,6 +3193,8 @@ export default function App() {
 
         return;
       }
+
+      requestPurpleHoleCheck();
 
       if (shiftPressed && singleDragUnitId) {
         moveSingleUnitWithinRow(
@@ -2978,10 +3217,12 @@ export default function App() {
       return;
     }
 
+    // גרירה מהמחסן
     if (data?.source === "load") {
       if (!overData || overData.source !== "cell") {
         return;
       }
+
       const unit = getUnitById(data.unitId);
 
       if (!unit) return;
@@ -3000,7 +3241,10 @@ export default function App() {
           toHour
         ).includes(candidate.id);
 
-        return !alreadyInTarget && !canTeacherWorkAt(candidate.teacherId, selectedDay, toHour);
+        return (
+          !alreadyInTarget &&
+          !canTeacherWorkAt(candidate.teacherId, selectedDay, toHour)
+        );
       });
 
       if (invalidUnits.length > 0) {
@@ -3009,14 +3253,17 @@ export default function App() {
             const teacher = getTeacherById(candidate.teacherId);
 
             if (isTeacherBlockedHour(candidate.teacherId, selectedDay, toHour)) {
-              return `${teacher?.name || candidate.teacherId} (${candidate.className}) — חסום/ה בשעה זו`;
+              return `${teacher?.name || candidate.teacherId
+                } (${candidate.className}) — חסום/ה בשעה זו`;
             }
 
             if (isTeacherFreeDay(candidate.teacherId, selectedDay)) {
-              return `${teacher?.name || candidate.teacherId} (${candidate.className}) — ביום חופשי`;
+              return `${teacher?.name || candidate.teacherId
+                } (${candidate.className}) — ביום חופשי`;
             }
 
-            return `${teacher?.name || candidate.teacherId} (${candidate.className})`;
+            return `${teacher?.name || candidate.teacherId} (${candidate.className
+              })`;
           })
           .join(", ");
 
@@ -3024,9 +3271,26 @@ export default function App() {
         return;
       }
 
+      requestPurpleHoleCheck();
+
       placeUnitsByClassAtHour(unitsToPlace, toHour, shiftPressed);
+
+
+
       return;
     }
+  }
+
+  function getPurpleHolesForAllDaysFromSchedule(scheduleObject) {
+    const holes = [];
+
+    for (const day of days) {
+      holes.push(
+        ...getPurpleHolesForDayFromSchedule(scheduleObject, day)
+      );
+    }
+
+    return holes;
   }
 
   async function handleExcelUpload(event) {
@@ -3042,7 +3306,6 @@ export default function App() {
         parsedData = buildDataFromRawSadin(result);
       } catch (rawError) {
         console.error("Raw sadin import failed:", rawError);
-        console.log("Available sheets:", result.sheetNames);
 
         try {
           parsedData = buildDataFromTimetableSheet(result);
@@ -3055,8 +3318,6 @@ export default function App() {
       }
       //const parsedData = buildDataFromTimetableSheet(result);
 
-      console.log("Excel imported:", result);
-      console.log("Parsed school data:", parsedData);
 
       setImportedExcel(result);
       const normalizedData = ensureDailyHoursForClasses(parsedData);
@@ -3334,7 +3595,14 @@ export default function App() {
                       />
                       הדגשת מורים
                     </label>
-
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={visiblePanels.difficultyHints}
+                        onChange={() => togglePanel("difficultyHints")}
+                      />
+                      הצג דרגות קושי
+                    </label>
                     <label className="checkbox-label">
                       <input
                         type="checkbox"
@@ -3342,6 +3610,14 @@ export default function App() {
                         onChange={(e) => setShowFreeDayTeachers(e.target.checked)}
                       />
                       הצג מורים ביום חופשי
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={visiblePanels.purpleHoleAlerts}
+                        onChange={() => togglePanel("purpleHoleAlerts")}
+                      />
+                      התראות חור סגול
                     </label>
                     <label>
                       <input
@@ -3390,6 +3666,8 @@ export default function App() {
                         warnings: false,
                         highlights: false,
                         dailyBalance: false,
+                        purpleHoleAlerts: true,
+                        groups: true,
                       });
                     }
 
@@ -3578,6 +3856,10 @@ export default function App() {
 
                           const blocked = isBlockedCell(className, selectedDay, hour);
                           const placementHint = getPlacementHint(className, selectedDay, hour);
+                          const purpleHole = isPurpleHoleCell(selectedDay, className, hour);
+                          const difficultyCount = visiblePanels.difficultyHints
+                            ? getDifficultyCount(className, selectedDay, hour)
+                            : null;
                           const activeTeacherHere = cellHasActiveTeacher(
                             className,
                             selectedDay,
@@ -3587,6 +3869,7 @@ export default function App() {
 
                           return (
                             <DroppableCell
+                              purpleHole={purpleHole}
                               locked={locked}
                               availableScheduledUnitsForSelectedCell={availableScheduledUnitsForSelectedCell}
                               onToggleLock={() => toggleCellLock(selectedDay, className, hour)}
@@ -3605,6 +3888,8 @@ export default function App() {
                               placementHint={placementHint}
                               activeTeacherHere={activeTeacherHere}
                               teacherHighlightsByUnit={teacherHighlightsByUnit}
+                              difficultyCount={difficultyCount}
+                              difficultyLevel={getDifficultyLevel(difficultyCount)}
                               onClick={() => {
                                 setSelectedCell({
                                   className,
@@ -3668,6 +3953,7 @@ export default function App() {
             isTeacherFreeDay={isTeacherFreeDay}
             isTeacherBlockedHour={isTeacherBlockedHour}
             removeTeacherFromSpecificTime={removeTeacherFromSpecificTime}
+            requestPurpleHoleCheck={requestPurpleHoleCheck}
           />
         )}
 
@@ -3676,6 +3962,7 @@ export default function App() {
             teachers={teachers}
             setSchoolData={setSchoolData}
             removeTeacherFromDay={removeTeacherFromDay}
+            requestPurpleHoleCheck={requestPurpleHoleCheck}
           />
         )}
 

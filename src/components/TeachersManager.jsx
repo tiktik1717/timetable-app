@@ -1,4 +1,4 @@
-export default function TeachersManager({ teachers, setSchoolData, removeTeacherFromDay, }) {
+export default function TeachersManager({ teachers, setSchoolData, removeTeacherFromDay, requestPurpleHoleCheck, }) {
     const days = ["א", "ב", "ג", "ד", "ה", "ו"];
 
     const sortedTeachers = [...teachers].sort((a, b) =>
@@ -33,7 +33,7 @@ export default function TeachersManager({ teachers, setSchoolData, removeTeacher
             );
 
             if (!confirmRemove) return;
-
+            requestPurpleHoleCheck();
             const result = removeTeacherFromDay(teacher.id, day);
 
             if (result.removedCount > 0) {
@@ -45,6 +45,7 @@ export default function TeachersManager({ teachers, setSchoolData, removeTeacher
                 alert(
                     `הוסרו ${result.removedCount} שיבוץ/ים של ${teacher.name} ביום ${day}.${groupsText}`
                 );
+
             }
         }
 

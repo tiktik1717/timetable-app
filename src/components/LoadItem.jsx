@@ -52,7 +52,7 @@ export default function LoadItem({
     placements.length > 0 ? placements.join(", ") : "אין שיבוצים עדיין";
 
   function selectUnit() {
-    console.log("select unit", unit.id);
+
     setShowTooltip(false);
     onSelectLoadUnit(unit.id);
 
