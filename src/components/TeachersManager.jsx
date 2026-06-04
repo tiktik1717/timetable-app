@@ -1,4 +1,4 @@
-export default function TeachersManager({ teachers, setSchoolData }) {
+export default function TeachersManager({ teachers, setSchoolData, removeTeacherFromDay, }) {
     const days = ["א", "ב", "ג", "ד", "ה", "ו"];
 
     const sortedTeachers = [...teachers].sort((a, b) =>
@@ -25,10 +25,32 @@ export default function TeachersManager({ teachers, setSchoolData }) {
 
     function toggleFreeDay(teacher, day) {
         const freeDays = teacher.freeDays || [];
+        const isAddingFreeDay = !freeDays.includes(day);
 
-        const nextFreeDays = freeDays.includes(day)
-            ? freeDays.filter((freeDay) => freeDay !== day)
-            : [...freeDays, day];
+        if (isAddingFreeDay) {
+            const confirmRemove = confirm(
+                `הגדרת יום ${day} כיום חופשי תסיר את כל השיבוצים של ${teacher.name} ביום זה.\n\nהאם להמשיך?`
+            );
+
+            if (!confirmRemove) return;
+
+            const result = removeTeacherFromDay(teacher.id, day);
+
+            if (result.removedCount > 0) {
+                const groupsText =
+                    result.removedGroups.length > 0
+                        ? `\nהוסרו גם קבוצות: ${result.removedGroups.join(", ")}`
+                        : "";
+
+                alert(
+                    `הוסרו ${result.removedCount} שיבוץ/ים של ${teacher.name} ביום ${day}.${groupsText}`
+                );
+            }
+        }
+
+        const nextFreeDays = isAddingFreeDay
+            ? [...freeDays, day]
+            : freeDays.filter((freeDay) => freeDay !== day);
 
         updateTeacher(teacher.id, { freeDays: nextFreeDays });
     }

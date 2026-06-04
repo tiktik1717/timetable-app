@@ -105,6 +105,8 @@ export default function App() {
   const [cloudProjects, setCloudProjects] = useState([]);
   const [draggedTeacherId, setDraggedTeacherId] = useState(null);
   const [draggedClassName, setDraggedClassName] = useState(null);
+  const [activePlacementUnitId, setActivePlacementUnitId] = useState(null);
+  const [dragOriginCell, setDragOriginCell] = useState(null);
   const [rowHeightOffset, setRowHeightOffset] = useState(() => {
     return Number(localStorage.getItem("rowHeightOffset")) || 0;
   });
@@ -116,6 +118,19 @@ export default function App() {
   });
   const [hasUnsavedCloudChanges, setHasUnsavedCloudChanges] = useState(false);
   const [lastCloudSavedAt, setLastCloudSavedAt] = useState(null);
+  const [lockedPlacements, setLockedPlacements] = useState(() => {
+    const saved = localStorage.getItem("lockedPlacements");
+
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return {};
+      }
+    }
+
+    return {};
+  });
   const [checkpoints, setCheckpoints] = useState(() => {
     const saved = localStorage.getItem("checkpoints");
 
@@ -153,6 +168,9 @@ export default function App() {
     return localStorage.getItem("selectedCloudProjectId") || "";
   });
 
+  useEffect(() => {
+    localStorage.setItem("lockedPlacements", JSON.stringify(lockedPlacements));
+  }, [lockedPlacements]);
 
   useEffect(() => {
     localStorage.setItem("rowHeightOffset", String(rowHeightOffset));
@@ -646,6 +664,75 @@ export default function App() {
     setFuture(newFuture);
   }
 
+  function getLockKey(day, className, hour, unitId) {
+    return `${day}|${className}|${hour}|${unitId}`;
+  }
+
+  function isUnitLocked(day, className, hour, unitId) {
+    return !!lockedPlacements[getLockKey(day, className, hour, unitId)];
+  }
+
+  function isCellLocked(day, className, hour) {
+    const unitIds = getCellUnitIds(day, className, hour);
+
+    return unitIds.some((unitId) =>
+      isUnitLocked(day, className, hour, unitId)
+    );
+  }
+
+  function toggleCellLock(day, className, hour) {
+    const unitIds = getCellUnitIds(day, className, hour);
+
+    if (unitIds.length === 0) return;
+
+    const shouldUnlock = unitIds.some((unitId) =>
+      isUnitLocked(day, className, hour, unitId)
+    );
+
+    setLockedPlacements((prev) => {
+      const next = { ...prev };
+
+      for (const unitId of unitIds) {
+        const unit = getUnitById(unitId);
+
+        if (!unit) continue;
+
+        if (isSameTimeGroup(unit)) {
+          const groupUnits = getScheduledSameTimeGroupUnitsAt(
+            day,
+            hour,
+            unit.constraintGroupId
+          );
+
+          for (const groupUnit of groupUnits) {
+            const key = getLockKey(
+              day,
+              groupUnit.className,
+              hour,
+              groupUnit.id
+            );
+
+            if (shouldUnlock) {
+              delete next[key];
+            } else {
+              next[key] = true;
+            }
+          }
+        } else {
+          const key = getLockKey(day, className, hour, unitId);
+
+          if (shouldUnlock) {
+            delete next[key];
+          } else {
+            next[key] = true;
+          }
+        }
+      }
+
+      return next;
+    });
+  }
+
   function togglePanel(panelName) {
     setVisiblePanels((prev) => ({
       ...prev,
@@ -665,6 +752,147 @@ export default function App() {
     setSchedule(nextSchedule);
     setHistory(newHistory);
     setFuture(newFuture);
+  }
+
+  function getActivePlacementUnits() {
+    const baseUnit = getUnitById(activePlacementUnitId);
+
+    if (!baseUnit) return [];
+
+    return getSameTimeGroupUnits(baseUnit);
+  }
+
+  function getGroupPlacementStatus(day, hour) {
+    const units = getActivePlacementUnits();
+    const activeUnit = getUnitById(activePlacementUnitId);
+
+    if (units.length === 0 || !activeUnit) return null;
+
+    let hasGroupProblem = false;
+
+    for (const unit of units) {
+      const isActiveUnit = unit.id === activeUnit.id;
+
+      const isBlockedOrFree =
+        isTeacherBlockedHour(unit.teacherId, day, hour) ||
+        isTeacherFreeDay(unit.teacherId, day);
+
+      if (isBlockedOrFree) {
+        if (isActiveUnit) {
+          return "teacherBlocked";
+        }
+
+        hasGroupProblem = true;
+        continue;
+      }
+
+      if (isTeacherBusyAt(unit.teacherId, day, hour)) {
+        if (isActiveUnit) {
+          return "busy";
+        }
+
+        hasGroupProblem = true;
+      }
+    }
+
+    if (hasGroupProblem) {
+      return "groupBusy";
+    }
+
+    return "available";
+  }
+
+  function removeTeacherFromDay(teacherId, day) {
+    let removedCount = 0;
+    const removedGroups = new Set();
+
+    updateScheduleWithHistory((prev) => {
+      const newSchedule = structuredClone(prev);
+
+      for (const hour of hours) {
+        const groupsToRemove = new Set();
+        const singleUnitIdsToRemove = new Set();
+
+        // שלב א: מזהים מה צריך להסיר בשעה הזו
+        for (const className of classes) {
+          const unitIds = getCellUnitIdsFromSchedule(
+            newSchedule,
+            day,
+            className,
+            hour
+          );
+
+          for (const unitId of unitIds) {
+            const unit = getUnitById(unitId);
+
+            if (unit?.teacherId !== teacherId) continue;
+
+            if (isSameTimeGroup(unit)) {
+              groupsToRemove.add(unit.constraintGroupId);
+            } else {
+              singleUnitIdsToRemove.add(unit.id);
+            }
+          }
+        }
+
+        // שלב ב: מסירים יחידות בודדות
+        for (const className of classes) {
+          const unitIds = getCellUnitIdsFromSchedule(
+            newSchedule,
+            day,
+            className,
+            hour
+          );
+
+          const nextUnitIds = unitIds.filter((unitId) => {
+            const shouldRemove = singleUnitIdsToRemove.has(unitId);
+
+            if (shouldRemove) removedCount++;
+
+            return !shouldRemove;
+          });
+
+          if (nextUnitIds.length !== unitIds.length) {
+            setCellUnitIds(newSchedule, day, className, hour, nextUnitIds);
+          }
+        }
+
+        // שלב ג: מסירים קבוצות sameTime שלמות
+        for (const groupId of groupsToRemove) {
+          const group = getConstraintGroupById(groupId);
+          removedGroups.add(group?.name || groupId);
+
+          for (const className of classes) {
+            const unitIds = getCellUnitIdsFromSchedule(
+              newSchedule,
+              day,
+              className,
+              hour
+            );
+
+            const nextUnitIds = unitIds.filter((unitId) => {
+              const unit = getUnitById(unitId);
+              const shouldRemove = unit?.constraintGroupId === groupId;
+
+              if (shouldRemove) removedCount++;
+
+              return !shouldRemove;
+            });
+
+            if (nextUnitIds.length !== unitIds.length) {
+              setCellUnitIds(newSchedule, day, className, hour, nextUnitIds);
+            }
+          }
+        }
+      }
+
+      return newSchedule;
+    });
+
+    return {
+      removedCount,
+      removedGroups: [...removedGroups],
+    };
   }
 
   function saveProjectToFile() {
@@ -880,14 +1108,22 @@ export default function App() {
 
   function isTeacherBusyAt(teacherId, day, hour) {
     for (const className of classes) {
+      const isOriginCell =
+        dragOriginCell &&
+        dragOriginCell.className === className &&
+        dragOriginCell.hour === String(hour);
+
       const unitIds = getCellUnitIds(day, className, hour);
 
       for (const unitId of unitIds) {
         const unit = getUnitById(unitId);
 
-        if (unit?.teacherId === teacherId) {
-          return true;
-        }
+        if (unit?.teacherId !== teacherId) continue;
+
+        // אם זה התא שממנו התחלנו לגרור, לא מחשיבים את אותו שיבוץ כתפוס
+        if (isOriginCell) continue;
+
+        return true;
       }
     }
 
@@ -895,10 +1131,16 @@ export default function App() {
   }
 
   function getPlacementHint(className, day, hour) {
-    const teacherId = getActivePlacementTeacherId();
     const activeClassName = getActivePlacementClassName();
+    if (
+      dragOriginCell &&
+      dragOriginCell.className === className &&
+      dragOriginCell.hour === String(hour)
+    ) {
+      return null;
+    }
 
-    if (!teacherId || !activeClassName) return null;
+    if (!activeClassName) return null;
 
     if (className !== activeClassName) return null;
 
@@ -906,27 +1148,42 @@ export default function App() {
       return null;
     }
 
-    if (isTeacherBlockedHour(teacherId, day, hour)) {
-      return "teacherBlocked";
-    }
-
-    if (isTeacherFreeDay(teacherId, day)) {
-      return null;
-    }
-
-    if (isTeacherBusyAt(teacherId, day, hour)) {
-      return "busy";
-    }
-
-    return "available";
+    return getGroupPlacementStatus(day, hour);
   }
 
   function removeTeacherFromSpecificTime(teacherId, day, hour) {
     let removedCount = 0;
+    const removedGroups = new Set();
 
     updateScheduleWithHistory((prev) => {
       const newSchedule = structuredClone(prev);
 
+      const groupsToRemove = new Set();
+      const singleUnitIdsToRemove = new Set();
+
+      // שלב א: לזהות מה צריך להסיר
+      for (const className of classes) {
+        const unitIds = getCellUnitIdsFromSchedule(
+          newSchedule,
+          day,
+          className,
+          hour
+        );
+
+        for (const unitId of unitIds) {
+          const unit = getUnitById(unitId);
+
+          if (unit?.teacherId !== teacherId) continue;
+
+          if (isSameTimeGroup(unit)) {
+            groupsToRemove.add(unit.constraintGroupId);
+          } else {
+            singleUnitIdsToRemove.add(unit.id);
+          }
+        }
+      }
+
+      // שלב ב: להסיר יחידות בודדות
       for (const className of classes) {
         const unitIds = getCellUnitIdsFromSchedule(
           newSchedule,
@@ -936,8 +1193,7 @@ export default function App() {
         );
 
         const nextUnitIds = unitIds.filter((unitId) => {
-          const unit = getUnitById(unitId);
-          const shouldRemove = unit?.teacherId === teacherId;
+          const shouldRemove = singleUnitIdsToRemove.has(unitId);
 
           if (shouldRemove) removedCount++;
 
@@ -949,10 +1205,42 @@ export default function App() {
         }
       }
 
+      // שלב ג: להסיר קבוצות sameTime שלמות
+      for (const groupId of groupsToRemove) {
+        const group = getConstraintGroupById(groupId);
+        removedGroups.add(group?.name || groupId);
+
+        for (const className of classes) {
+          const unitIds = getCellUnitIdsFromSchedule(
+            newSchedule,
+            day,
+            className,
+            hour
+          );
+
+          const nextUnitIds = unitIds.filter((unitId) => {
+            const unit = getUnitById(unitId);
+
+            const shouldRemove = unit?.constraintGroupId === groupId;
+
+            if (shouldRemove) removedCount++;
+
+            return !shouldRemove;
+          });
+
+          if (nextUnitIds.length !== unitIds.length) {
+            setCellUnitIds(newSchedule, day, className, hour, nextUnitIds);
+          }
+        }
+      }
+
       return newSchedule;
     });
 
-    return removedCount;
+    return {
+      removedCount,
+      removedGroups: [...removedGroups],
+    };
   }
 
   function getPreviousCheckpointId(checkpointId, checkpointList = checkpoints) {
@@ -2084,7 +2372,31 @@ export default function App() {
     );
   }
 
+  function isScheduledUnitMovableToSelectedCell(unit, sourceClassName, sourceHour) {
+    if (!selectedCell) return false;
+
+    if (unit.className !== selectedCell.className) return false;
+
+    if (String(sourceHour) === String(selectedCell.hour)) return false;
+
+    if (isCellLocked(selectedDay, sourceClassName, sourceHour)) return false;
+
+    if (!canTeacherWorkAt(unit.teacherId, selectedDay, selectedCell.hour)) {
+      return false;
+    }
+
+    if (isTeacherBusyAt(unit.teacherId, selectedDay, selectedCell.hour)) {
+      return false;
+    }
+
+    return true;
+  }
+
   function removeTeacherFromCell(className, hour) {
+    if (isCellLocked(selectedDay, className, hour)) {
+      alert("לא ניתן למחוק תא נעול");
+      return;
+    }
     const unitIds = getCellUnitIds(selectedDay, className, hour);
     const units = unitIds.map(getUnitById).filter(Boolean);
 
@@ -2615,6 +2927,11 @@ export default function App() {
     }
 
     const [toClass, toHour] = over.id.split("-");
+    if (isCellLocked(selectedDay, toClass, toHour)) {
+      alert("לא ניתן לשבץ או להחליף תא נעול");
+      return;
+    }
+
     if (isBlockedCell(toClass, selectedDay, toHour)) {
       alert("לא ניתן לשבץ בשעה שאינה קיימת בכיתה זו ביום זה");
       return;
@@ -2776,9 +3093,14 @@ export default function App() {
           unitId = data.unitId;
           const unit = getUnitById(unitId);
           className = unit?.className || null;
+          setDragOriginCell(null);
         }
 
         if (data?.source === "cell") {
+          setDragOriginCell({
+            className: data.fromClass,
+            hour: String(data.fromHour),
+          });
           className = data.fromClass || null;
 
           if (shiftPressed) {
@@ -2797,6 +3119,7 @@ export default function App() {
         setDraggedTeacherId(unit?.teacherId || null);
         setDraggedClassName(className);
         setHighlightedGroupId(unit?.constraintGroupId || null);
+        setActivePlacementUnitId(unitId || null);
       }}
 
       onDragOver={(event) => {
@@ -2828,7 +3151,9 @@ export default function App() {
 
         if (overData?.source === "cell") {
           setSelectedLoadUnitId(null);
+          setActivePlacementUnitId(null);
         }
+        setDragOriginCell(null);
       }}
 
       onDragCancel={() => {
@@ -2836,6 +3161,7 @@ export default function App() {
         setSingleDragUnitId(null);
         setDraggedTeacherId(null);
         setDraggedClassName(null);
+        setDragOriginCell(null);
       }}
     >
 
@@ -3159,7 +3485,10 @@ export default function App() {
                                   teacherHighlight={teacherHighlight}
                                   selectedLoadUnitId={selectedLoadUnitId}
                                   availableForSelectedCell={availableForSelectedCell}
-                                  onSelectLoadUnit={setSelectedLoadUnitId}
+                                  onSelectLoadUnit={(unitId) => {
+                                    setSelectedLoadUnitId(unitId);
+                                    setActivePlacementUnitId(unitId);
+                                  }}
                                   onAssignGroup={(unit) => {
                                     setGroupDialogUnit(unit);
                                     setGroupDialogHours(String(unit.hours));
@@ -3204,6 +3533,7 @@ export default function App() {
                         {visibleHours.map((hour) => {
                           const unitIds = getCellUnitIds(selectedDay, className, hour);
                           const units = unitIds.map(getUnitById).filter(Boolean);
+                          const availableScheduledUnitsForSelectedCell = new Set();
 
                           const teachersByUnit = {};
                           const groupsByUnit = {};
@@ -3211,7 +3541,9 @@ export default function App() {
 
                           for (const unit of units) {
                             const teacher = getTeacherById(unit.teacherId);
-
+                            if (isScheduledUnitMovableToSelectedCell(unit, className, hour)) {
+                              availableScheduledUnitsForSelectedCell.add(unit.id);
+                            }
                             teachersByUnit[unit.id] = teacher;
                             groupsByUnit[unit.id] = getUnitDisplayGroup(unit);
                             teacherHighlightsByUnit[unit.id] = getTeacherHighlight(teacher);
@@ -3251,9 +3583,13 @@ export default function App() {
                             selectedDay,
                             hour
                           );
+                          const locked = isCellLocked(selectedDay, className, hour);
 
                           return (
                             <DroppableCell
+                              locked={locked}
+                              availableScheduledUnitsForSelectedCell={availableScheduledUnitsForSelectedCell}
+                              onToggleLock={() => toggleCellLock(selectedDay, className, hour)}
                               key={hour}
                               className={className}
                               hour={hour}
@@ -3339,6 +3675,7 @@ export default function App() {
           <TeachersManager
             teachers={teachers}
             setSchoolData={setSchoolData}
+            removeTeacherFromDay={removeTeacherFromDay}
           />
         )}
 

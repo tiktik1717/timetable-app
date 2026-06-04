@@ -72,14 +72,21 @@ export default function TeacherView({
             }),
         }));
         if (!wasBlocked) {
-            const removedCount = removeTeacherFromSpecificTime(
+            const result = removeTeacherFromSpecificTime(
                 selectedTeacherForView,
                 day,
                 hour
             );
 
-            if (removedCount > 0) {
-                alert(`המורה הוסר/ה מ-${removedCount} שיבוץ/ים מפני שהשעה נחסמה.`);
+            if (result.removedCount > 0) {
+                const groupsText =
+                    result.removedGroups.length > 0
+                        ? `\nהוסרו גם קבוצות: ${result.removedGroups.join(", ")}`
+                        : "";
+
+                alert(
+                    `בעקבות חסימת השעה הוסרו ${result.removedCount} שיבוץ/ים.${groupsText}`
+                );
             }
         }
     }

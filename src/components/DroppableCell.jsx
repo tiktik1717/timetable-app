@@ -17,6 +17,9 @@ export default function DroppableCell({
   teacherHighlightsByUnit,
   placementHint,
   activeTeacherHere,
+  locked,
+  onToggleLock,
+  availableScheduledUnitsForSelectedCell,
 }) {
   const cellId = `${className}-${hour}`;
 
@@ -45,7 +48,7 @@ export default function DroppableCell({
       fromHour: String(hour),
       unitIds: units.map((unit) => unit.id),
     },
-    disabled: blocked || units.length === 0,
+    disabled: blocked || locked || units.length === 0,
   });
 
   const teacherStyle = {
@@ -67,10 +70,20 @@ export default function DroppableCell({
         placementHint === "available" ? "placement-available" : "",
         placementHint === "busy" ? "placement-busy" : "",
         placementHint === "teacherBlocked" ? "placement-teacher-blocked" : "",
+        placementHint === "groupBusy" ? "placement-group-busy" : "",
+        placementHint === "groupBlocked" ? "placement-group-blocked" : "",
         activeTeacherHere ? "active-teacher-cell" : "",
+        locked ? "locked-cell" : "",
       ].join(" ")}
       onMouseDown={onClick}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        if (units.length > 0) {
+          onToggleLock();
+        }
+      }}
     >
+
       {!blocked && units.length > 0 && (
         <div
           ref={setDraggableRef}
@@ -80,6 +93,7 @@ export default function DroppableCell({
           className="cell-stack"
         >
           {units.map((unit) => {
+            const isAvailableForSelectedCell = availableScheduledUnitsForSelectedCell?.has(unit.id);
             const teacherHighlight = teacherHighlightsByUnit?.[unit.id];
             const teacher = teachersByUnit[unit.id];
             const group = groupsByUnit[unit.id];
@@ -97,6 +111,7 @@ export default function DroppableCell({
                   isConflicting ? "cell-teacher-conflict" : "",
                   isHighlighted ? "group-highlight" : "",
                   teacherHighlight ? "teacher-search-highlight" : "",
+                  isAvailableForSelectedCell ? "available-for-selected-cell" : "",
                 ].join(" ")}
                 style={{
                   backgroundColor,
