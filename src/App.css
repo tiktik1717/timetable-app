@@ -1344,3 +1344,67 @@ body {
 .placement-group-busy {
   background: #ffcc80 !important;
 }
+
+.help-dialog {
+  width: min(1000px, 90vw);
+  height: min(85vh, 900px);
+
+  background: white;
+
+  border-radius: 10px;
+
+  display: flex;
+  flex-direction: column;
+
+  direction: rtl;
+}
+
+.help-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  padding: 12px 20px;
+
+  border-bottom: 1px solid #ddd;
+
+  flex-shrink: 0;
+}
+
+.help-content {
+  flex: 1;
+
+  overflow-y: auto;
+
+  padding: 20px;
+
+  line-height: 1.7;
+
+  font-size: 15px;
+}
+
+.help-content pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  margin: 0;
+}
+
+.help-content h1,
+.help-content h2,
+.help-content h3 {
+  margin-top: 24px;
+  margin-bottom: 12px;
+}
+
+.help-content ul {
+  padding-right: 24px;
+}
+
+.help-content li {
+  margin-bottom: 6px;
+}
+
+.help-content p {
+  margin-bottom: 12px;
+}

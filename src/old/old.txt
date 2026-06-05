@@ -1,0 +1,32 @@
+        {showHelpDialog && (
+          <div className="modal-backdrop" onClick={() => setShowHelpDialog(false)}>
+            <div className="group-dialog" onClick={(e) => e.stopPropagation()}>
+              <h3>עזרה וקיצורי מקלדת</h3>
+
+              <ul className="help-list">
+                <li><strong>Delete</strong> — מוחק תא מסומן.</li>
+                <li>גרירה למחסן — מוחקת שיבוץ.</li>
+                <li><strong>Ctrl + גרירה</strong> — החלפה בין תאים.</li>
+                <li><strong>Shift + גרירה לתא תפוס</strong> — מוסיף מורה לתא.</li>
+                <li>לחיצה על מורה במחסן ואז מספר — שיבוץ מהיר באותה שעה.</li>
+                <li><strong>Ctrl+Z / Ctrl+ז</strong> — ביטול פעולה.</li>
+                <li><strong>Ctrl+Y / Ctrl+ט</strong> — בצע שוב.</li>
+                <li><strong>Alt+1–6</strong> — מעבר בין ימים א–ו.</li>
+                <li><strong>Alt+C / Alt+ק</strong> — תצוגת קודים.</li>
+                <li><strong>Alt+N / Alt+מ</strong> — תצוגת שמות.</li>
+                <li><strong>Alt+F / Alt+כ</strong> — מסך שיבוץ מלא.</li>
+                <li><strong>Alt+V / Alt+ת</strong> — פתיחה/סגירה של תפריט תצוגה.</li>
+                <li><strong>Ctrl+D / Ctrl+ג</strong> — הצגה/הסתרה של פאנל הדגשת מורים.</li>
+                <li><strong>Ctrl+1–4</strong> — מעבר לתיבת הדגשת מורה 1–4.</li>
+                <li><strong>Alt+Q / Alt+/</strong> — ניקוי מורה פעיל לשיבוץ.</li>
+              </ul>
+
+              <button
+                className="dialog-cancel"
+                onClick={() => setShowHelpDialog(false)}
+              >
+                סגור
+              </button>
+            </div>
+          </div>
+        )}

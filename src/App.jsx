@@ -38,6 +38,8 @@ import TeacherHighlightPanel, {
 import FileManager from "./components/FileManager";
 import AuthPanel from "./components/AuthPanel";
 import { supabase } from "./services/supabaseClient";
+import ReactMarkdown from "react-markdown";
+import { HELP_TEXT } from "./helpText";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -773,6 +775,69 @@ export default function App() {
     setSchedule(nextSchedule);
     setHistory(newHistory);
     setFuture(newFuture);
+  }
+
+  function violatesConstraintRulesInSchedule(
+    unit,
+    scheduleObject,
+    day,
+    className,
+    hour,
+    options = {}
+  ) {
+    const ignoredUnitIds = new Set(options.ignoredUnitIds || []);
+
+    if (!unit?.constraintGroupId) return false;
+
+    const group = getConstraintGroupById(unit.constraintGroupId);
+
+    if (!group) return false;
+
+    if (hasRule(group, "notSameDaySameClass")) {
+      const classHours = getClassHoursForDay(className, day);
+
+      for (let currentHour = 1; currentHour <= classHours; currentHour++) {
+        const unitIds = getCellUnitIdsFromSchedule(
+          scheduleObject,
+          day,
+          className,
+          currentHour
+        );
+
+        for (const unitId of unitIds) {
+          if (ignoredUnitIds.has(unitId)) continue;
+
+          const scheduledUnit = getUnitById(unitId);
+
+          if (scheduledUnit?.constraintGroupId === unit.constraintGroupId) {
+            return true;
+          }
+        }
+      }
+    }
+
+    if (hasRule(group, "notSameTime")) {
+      for (const currentClassName of classes) {
+        const unitIds = getCellUnitIdsFromSchedule(
+          scheduleObject,
+          day,
+          currentClassName,
+          hour
+        );
+
+        for (const unitId of unitIds) {
+          if (ignoredUnitIds.has(unitId)) continue;
+
+          const scheduledUnit = getUnitById(unitId);
+
+          if (scheduledUnit?.constraintGroupId === unit.constraintGroupId) {
+            return true;
+          }
+        }
+      }
+    }
+
+    return false;
   }
 
   function getActivePlacementUnits() {
@@ -1818,6 +1883,18 @@ export default function App() {
         day,
         hour,
         scheduleObject
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      violatesConstraintRulesInSchedule(
+        unit,
+        scheduleObject,
+        day,
+        className,
+        hour
       )
     ) {
       return false;
@@ -4102,40 +4179,60 @@ export default function App() {
             setShowHelpDialog={setShowHelpDialog}
           />
         )}
-
         {showHelpDialog && (
-          <div className="modal-backdrop" onClick={() => setShowHelpDialog(false)}>
-            <div className="group-dialog" onClick={(e) => e.stopPropagation()}>
-              <h3>עזרה וקיצורי מקלדת</h3>
+          <div
+            className="modal-backdrop"
+            onClick={() => setShowHelpDialog(false)}
+          >
+            <div
+              className="help-dialog"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="help-header">
+                <h2>עזרה</h2>
 
-              <ul className="help-list">
-                <li><strong>Delete</strong> — מוחק תא מסומן.</li>
-                <li>גרירה למחסן — מוחקת שיבוץ.</li>
-                <li><strong>Ctrl + גרירה</strong> — החלפה בין תאים.</li>
-                <li><strong>Shift + גרירה לתא תפוס</strong> — מוסיף מורה לתא.</li>
-                <li>לחיצה על מורה במחסן ואז מספר — שיבוץ מהיר באותה שעה.</li>
-                <li><strong>Ctrl+Z / Ctrl+ז</strong> — ביטול פעולה.</li>
-                <li><strong>Ctrl+Y / Ctrl+ט</strong> — בצע שוב.</li>
-                <li><strong>Alt+1–6</strong> — מעבר בין ימים א–ו.</li>
-                <li><strong>Alt+C / Alt+ק</strong> — תצוגת קודים.</li>
-                <li><strong>Alt+N / Alt+מ</strong> — תצוגת שמות.</li>
-                <li><strong>Alt+F / Alt+כ</strong> — מסך שיבוץ מלא.</li>
-                <li><strong>Alt+V / Alt+ת</strong> — פתיחה/סגירה של תפריט תצוגה.</li>
-                <li><strong>Ctrl+D / Ctrl+ג</strong> — הצגה/הסתרה של פאנל הדגשת מורים.</li>
-                <li><strong>Ctrl+1–4</strong> — מעבר לתיבת הדגשת מורה 1–4.</li>
-                <li><strong>Alt+Q / Alt+/</strong> — ניקוי מורה פעיל לשיבוץ.</li>
-              </ul>
+                <button
+                  type="button"
+                  className="mini-button"
+                  onClick={() => setShowHelpDialog(false)}
+                >
+                  סגור
+                </button>
+              </div>
 
-              <button
-                className="dialog-cancel"
-                onClick={() => setShowHelpDialog(false)}
-              >
-                סגור
-              </button>
+              <div className="help-content">
+                <ReactMarkdown>{HELP_TEXT}</ReactMarkdown>
+              </div>
             </div>
           </div>
         )}
+        {showHelpDialog && (
+          <div
+            className="dialog-overlay"
+            onClick={() => setShowHelpDialog(false)}
+          >
+            <div
+              className="help-dialog"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="help-header">
+                <h2>עזרה</h2>
 
+                <button
+                  onClick={() => setShowHelpDialog(false)}
+                >
+                  ✖
+                </button>
+              </div>
+
+              <div className="help-content">
+                <ReactMarkdown>
+                  {HELP_TEXT}
+                </ReactMarkdown>
+              </div>
+            </div>
+          </div>
+        )}
         {groupDialogUnit && (
           <div className="modal-backdrop" onClick={() => setGroupDialogUnit(null)}>
             <div className="group-dialog" onClick={(e) => e.stopPropagation()}>
