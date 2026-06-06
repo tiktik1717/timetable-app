@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 export default function TeacherView({
     teachers,
     classes,
@@ -16,6 +18,7 @@ export default function TeacherView({
     isTeacherBlockedHour,
     removeTeacherFromSpecificTime,
     requestPurpleHoleCheck,
+    teacherHasViewChanges,
 }) {
     const selectedTeacher = teachers.find(
         (teacher) => teacher.id === selectedTeacherForView
@@ -108,6 +111,56 @@ export default function TeacherView({
         (_, index) => index + 1
     );
 
+    const [showChangedTeachersOnly, setShowChangedTeachersOnly] = useState(false);
+
+    const visibleTeachersForView =
+        showChangedTeachersOnly && comparisonCheckpointId
+            ? teachers.filter((teacher) => teacherHasViewChanges(teacher.id))
+            : teachers;
+
+    const currentTeacherIndex = visibleTeachersForView.findIndex(
+        (teacher) => teacher.id === selectedTeacherForView
+    );
+
+    useEffect(() => {
+        if (
+            visibleTeachersForView.length > 0 &&
+            !visibleTeachersForView.some(
+                (teacher) => teacher.id === selectedTeacherForView
+            )
+        ) {
+            setSelectedTeacherForView(visibleTeachersForView[0].id);
+        }
+    }, [showChangedTeachersOnly, comparisonCheckpointId, teachers]);
+
+    function goToPreviousTeacher() {
+        if (visibleTeachersForView.length === 0) return;
+
+        const index = visibleTeachersForView.findIndex(
+            (teacher) => teacher.id === selectedTeacherForView
+        );
+
+        const nextIndex =
+            index <= 0 ? visibleTeachersForView.length - 1 : index - 1;
+
+        setSelectedTeacherForView(visibleTeachersForView[nextIndex].id);
+    }
+
+    function goToNextTeacher() {
+        if (visibleTeachersForView.length === 0) return;
+
+        const index = visibleTeachersForView.findIndex(
+            (teacher) => teacher.id === selectedTeacherForView
+        );
+
+        const nextIndex =
+            index === -1 || index >= visibleTeachersForView.length - 1
+                ? 0
+                : index + 1;
+
+        setSelectedTeacherForView(visibleTeachersForView[nextIndex].id);
+    }
+
     return (
         <div className="teacher-view">
             <div className="teacher-view-header">
@@ -119,7 +172,7 @@ export default function TeacherView({
                         value={selectedTeacherForView}
                         onChange={(e) => setSelectedTeacherForView(e.target.value)}
                     >
-                        {teachers.map((teacher) => (
+                        {visibleTeachersForView.map((teacher) => (
                             <option key={teacher.id} value={teacher.id}>
                                 {teacher.name}
                             </option>
@@ -141,6 +194,23 @@ export default function TeacherView({
                             </option>
                         ))}
                     </select>
+                </label>
+                <button type="button" className="mini-button" onClick={goToPreviousTeacher}>
+                    הקודם
+                </button>
+
+                <button type="button" className="mini-button" onClick={goToNextTeacher}>
+                    הבא
+                </button>
+
+                <label className="inline-checkbox">
+                    <input
+                        type="checkbox"
+                        checked={showChangedTeachersOnly}
+                        disabled={!comparisonCheckpointId}
+                        onChange={(e) => setShowChangedTeachersOnly(e.target.checked)}
+                    />
+                    הצג מורים ששונו בלבד
                 </label>
             </div>
 

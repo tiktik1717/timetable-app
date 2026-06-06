@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 export default function ShahafView({
     classes,
     days,
@@ -13,6 +15,7 @@ export default function ShahafView({
     comparisonCheckpointId,
     setComparisonCheckpointId,
     comparisonCheckpoint,
+    classHasShahafChanges,
 }) {
     const maxHoursForClass = Math.max(
         0,
@@ -23,6 +26,48 @@ export default function ShahafView({
         { length: maxHoursForClass },
         (_, index) => index + 1
     );
+
+    const [showChangedClassesOnly, setShowChangedClassesOnly] = useState(false);
+
+    const visibleClassesForShahaf =
+        showChangedClassesOnly && comparisonCheckpointId
+            ? classes.filter(classHasShahafChanges)
+            : classes;
+
+    const currentClassIndex = visibleClassesForShahaf.indexOf(
+        selectedClassForShahaf
+    );
+
+    useEffect(() => {
+        if (
+            visibleClassesForShahaf.length > 0 &&
+            !visibleClassesForShahaf.includes(selectedClassForShahaf)
+        ) {
+            setSelectedClassForShahaf(visibleClassesForShahaf[0]);
+        }
+    }, [showChangedClassesOnly, comparisonCheckpointId, classes]);
+
+    function goToPreviousClass() {
+        if (visibleClassesForShahaf.length === 0) return;
+
+        const index = visibleClassesForShahaf.indexOf(selectedClassForShahaf);
+        const nextIndex =
+            index <= 0 ? visibleClassesForShahaf.length - 1 : index - 1;
+
+        setSelectedClassForShahaf(visibleClassesForShahaf[nextIndex]);
+    }
+
+    function goToNextClass() {
+        if (visibleClassesForShahaf.length === 0) return;
+
+        const index = visibleClassesForShahaf.indexOf(selectedClassForShahaf);
+        const nextIndex =
+            index === -1 || index >= visibleClassesForShahaf.length - 1
+                ? 0
+                : index + 1;
+
+        setSelectedClassForShahaf(visibleClassesForShahaf[nextIndex]);
+    }
 
     return (
         <div className="shahaf-view">
@@ -50,12 +95,30 @@ export default function ShahafView({
                         value={selectedClassForShahaf}
                         onChange={(e) => setSelectedClassForShahaf(e.target.value)}
                     >
-                        {classes.map((className) => (
+                        {visibleClassesForShahaf.map((className) => (
                             <option key={className} value={className}>
                                 {className}
                             </option>
                         ))}
                     </select>
+                </label>
+
+                <button type="button" className="mini-button" onClick={goToPreviousClass}>
+                    הקודם
+                </button>
+
+                <button type="button" className="mini-button" onClick={goToNextClass}>
+                    הבא
+                </button>
+
+                <label className="inline-checkbox">
+                    <input
+                        type="checkbox"
+                        checked={showChangedClassesOnly}
+                        disabled={!comparisonCheckpointId}
+                        onChange={(e) => setShowChangedClassesOnly(e.target.checked)}
+                    />
+                    הצג כיתות ששונו בלבד
                 </label>
             </div>
 

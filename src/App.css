@@ -1408,3 +1408,15 @@ body {
 .help-content p {
   margin-bottom: 12px;
 }
+
+.inline-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-inline-start: 10px;
+  font-size: 13px;
+}
+
+.mini-button {
+  margin-inline: 4px;
+}

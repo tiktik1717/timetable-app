@@ -1472,18 +1472,64 @@ export default function App() {
         hour
       ).includes(candidate.id);
 
-      return (
-        !alreadyInTarget &&
-        !canUnitFillCell(candidate, selectedDay, candidate.className, hour)
-      );
+      if (alreadyInTarget) return false;
+
+      if (isBlockedCell(candidate.className, selectedDay, hour)) {
+        return true;
+      }
+
+      if (isCellLocked(selectedDay, candidate.className, hour)) {
+        return true;
+      }
+
+      if (!canTeacherWorkAt(candidate.teacherId, selectedDay, hour)) {
+        return true;
+      }
+
+      return false;
     });
 
-    if (invalidUnits.length > 0) {
-      alert("לא ניתן לשבץ את כל הקבוצה");
-      return;
+    placeUnitsByClassAtHour(unitsToPlace, String(hour), false);
+  }
+
+  function classHasShahafChanges(className) {
+    if (!comparisonCheckpointId) return false;
+
+    for (const day of days) {
+      const classHours = getClassHoursForDay(className, day);
+
+      for (let hour = 1; hour <= classHours; hour++) {
+        if (isShahafCellChanged(day, className, hour)) {
+          return true;
+        }
+      }
     }
 
-    placeUnitsByClassAtHour(unitsToPlace, String(hour), false);
+    return false;
+  }
+
+  function teacherHasViewChanges(teacherId) {
+    if (!comparisonCheckpointId) return false;
+
+    const maxHoursForAllClasses = Math.max(
+      0,
+      ...days.map((day) =>
+        Math.max(
+          0,
+          ...classes.map((className) => getClassHoursForDay(className, day))
+        )
+      )
+    );
+
+    for (const day of days) {
+      for (let hour = 1; hour <= maxHoursForAllClasses; hour++) {
+        if (isTeacherCellChanged(teacherId, day, hour)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
   }
 
   function hasRule(group, ruleName) {
@@ -1863,10 +1909,88 @@ export default function App() {
 
     if (unitIds.length > 0) return false;
 
+    if (isTeamMeetingFullyScheduledInSchedule(scheduleObject, className)) {
+      return false;
+    }
+
     return !teachingUnits.some((unit) =>
       canUnitFillCellInSchedule(unit, scheduleObject, day, className, hour)
     );
   }
+
+  function isTeamMeetingFullyScheduledInSchedule(scheduleObject, className) {
+    if (!isTeamMeetingRow(className)) return false;
+
+    const meetingUnits = teachingUnits.filter(
+      (unit) => unit.className === className && unit.type === "teamMeeting"
+    );
+
+    if (meetingUnits.length === 0) return false;
+
+    return meetingUnits.every(
+      (unit) => getRemainingUnitHours(unit.id, scheduleObject) <= 0
+    );
+  }
+
+  function isPurpleHoleCell(day, className, hour) {
+    if (isBlockedCell(className, day, hour)) return false;
+
+    const unitIds = getCellUnitIds(day, className, hour);
+
+    if (unitIds.length > 0) return false;
+
+    if (isTeamMeetingFullyScheduledInSchedule(schedule, className)) {
+      return false;
+    }
+
+    return !teachingUnits.some((unit) =>
+      canUnitFillCell(unit, day, className, hour)
+    );
+  }
+
+  /*
+  function isPurpleHoleCell(day, className, hour) {
+    if (className.includes("ישיבה") || isTeamMeetingRow(className)) {
+      console.log("purple meeting check", {
+        day,
+        className,
+        hour,
+        isTeamMeeting: isTeamMeetingRow(className),
+        unitsInThisCell: getCellUnitIds(day, className, hour),
+        allMeetingCellsToday: hours.map((h) => ({
+          hour: h,
+          unitIds: getCellUnitIds(day, className, h),
+        })),
+      });
+    }
+    if (isBlockedCell(className, day, hour)) return false;
+
+    const unitIds = getCellUnitIds(day, className, hour);
+
+    if (unitIds.length > 0) return false;
+
+    if (isTeamMeetingRow(className)) {
+      const maxHour = getMaxHoursForDay(day);
+
+      const meetingAlreadyScheduledToday = Array.from(
+        { length: maxHour },
+        (_, index) => index + 1
+      ).some((currentHour) => {
+        const currentUnitIds = getCellUnitIds(day, className, currentHour);
+        return currentUnitIds.length > 0;
+      });
+
+      if (meetingAlreadyScheduledToday) {
+        return false;
+      }
+    }
+
+    return !teachingUnits.some((unit) =>
+      canUnitFillCell(unit, day, className, hour)
+    );
+  }
+  */
+
 
   function canUnitFillCellInSchedule(unit, scheduleObject, day, className, hour) {
     if (!unit) return false;
@@ -1947,8 +2071,20 @@ export default function App() {
     return Array.from({ length: maxHours }, (_, index) => index + 1);
   }
 
+  function isTeamMeetingRow(className) {
+    return teachingUnits.some(
+      (unit) =>
+        unit.className === className &&
+        unit.type === "teamMeeting"
+    );
+  }
+
   function isBlockedCell(className, day, hour) {
-    return Number(hour) > getClassHoursForDay(className, day);
+    if (isTeamMeetingRow(className)) {
+      return false;
+    }
+
+    return hour > getClassHoursForDay(className, day);
   }
 
   function splitUnitAndAssignGroup(unitId, groupId, hoursToAssign, subject) {
@@ -2679,17 +2815,7 @@ export default function App() {
 
     return true;
   }
-  function isPurpleHoleCell(day, className, hour) {
-    if (isBlockedCell(className, day, hour)) return false;
 
-    const unitIds = getCellUnitIds(day, className, hour);
-
-    if (unitIds.length > 0) return false;
-
-    return !teachingUnits.some((unit) =>
-      canUnitFillCell(unit, day, className, hour)
-    );
-  }
 
   function getPurpleHoles(dayToCheck = selectedDay) {
     const holes = [];
@@ -2713,11 +2839,7 @@ export default function App() {
 
 
   function alertNewPurpleHoles(beforeHoles, afterHoles) {
-    console.log("purple alert check", {
-      enabled: visiblePanels.purpleHoleAlerts,
-      beforeHoles,
-      afterHoles,
-    });
+
     if (!visiblePanels.purpleHoleAlerts) return;
 
     const beforeKeys = new Set(beforeHoles.map(getPurpleHoleKey));
@@ -3389,29 +3511,46 @@ export default function App() {
           toHour
         ).includes(candidate.id);
 
-        return (
-          !alreadyInTarget &&
-          !canUnitFillCell(candidate, selectedDay, candidate.className, toHour)
-        );
+        if (alreadyInTarget) return false;
+
+        if (isBlockedCell(candidate.className, selectedDay, toHour)) {
+          return true;
+        }
+
+        if (isCellLocked(selectedDay, candidate.className, toHour)) {
+          return true;
+        }
+
+        if (!canTeacherWorkAt(candidate.teacherId, selectedDay, toHour)) {
+          return true;
+        }
+
+        return false;
       });
 
       if (invalidUnits.length > 0) {
         const names = invalidUnits
           .map((candidate) => {
             const teacher = getTeacherById(candidate.teacherId);
+            const teacherName = teacher?.name || candidate.teacherId;
+
+            if (isBlockedCell(candidate.className, selectedDay, toHour)) {
+              return `${teacherName} (${candidate.className}) — השעה אינה קיימת בכיתה זו`;
+            }
+
+            if (isCellLocked(selectedDay, candidate.className, toHour)) {
+              return `${teacherName} (${candidate.className}) — התא נעול`;
+            }
 
             if (isTeacherBlockedHour(candidate.teacherId, selectedDay, toHour)) {
-              return `${teacher?.name || candidate.teacherId
-                } (${candidate.className}) — חסום/ה בשעה זו`;
+              return `${teacherName} (${candidate.className}) — חסום/ה בשעה זו`;
             }
 
             if (isTeacherFreeDay(candidate.teacherId, selectedDay)) {
-              return `${teacher?.name || candidate.teacherId
-                } (${candidate.className}) — ביום חופשי`;
+              return `${teacherName} (${candidate.className}) — ביום חופשי`;
             }
 
-            return `${teacher?.name || candidate.teacherId} (${candidate.className
-              })`;
+            return `${teacherName} (${candidate.className})`;
           })
           .join(", ");
 
@@ -4076,7 +4215,7 @@ export default function App() {
             dailyHoursByClass={dailyHoursByClass}
             getClassHoursForDay={getClassHoursForDay}
             isShahafCellChanged={isShahafCellChanged}
-
+            classHasShahafChanges={classHasShahafChanges}
             checkpoints={checkpoints}
             comparisonCheckpointId={comparisonCheckpointId}
             setComparisonCheckpointId={setComparisonCheckpointId}
@@ -4090,6 +4229,7 @@ export default function App() {
             classes={classes}
             days={days}
             hours={hours}
+            teacherHasViewChanges={teacherHasViewChanges}
             selectedTeacherForView={selectedTeacherForView}
             setSelectedTeacherForView={setSelectedTeacherForView}
             getCellUnitIds={getCellUnitIds}

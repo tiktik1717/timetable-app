@@ -121,6 +121,7 @@ export default function MeetingsManager({ teachers, meetings, setSchoolData }) {
                 subject: "ישיבה",
                 hours: 1,
                 constraintGroupId: meeting.id,
+                type: "teamMeeting",
             }));
 
             return {
