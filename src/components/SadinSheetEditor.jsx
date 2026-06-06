@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 export default function SadinSheetEditor({
     sheetRows,
     teachers,
@@ -7,13 +9,39 @@ export default function SadinSheetEditor({
     const sortedSheetRows = [...sheetRows].sort((a, b) =>
         (a.teacherName || "").localeCompare(b.teacherName || "", "he")
     );
-
+    const [sadinSearchText, setSadinSearchText] = useState("");
+    const [sadinSearchField, setSadinSearchField] = useState("all");
     function updateRow(index, field, value) {
         const nextRows = sheetRows.map((row, rowIndex) =>
             rowIndex === index ? { ...row, [field]: value } : row
         );
 
         onUpdateRows(nextRows);
+    }
+
+    function normalizeSearch(value) {
+        return String(value || "").trim().toLowerCase();
+    }
+
+    function rowMatchesSearch(row) {
+        const search = normalizeSearch(sadinSearchText);
+
+        if (!search) return true;
+
+        const fields = {
+            teacherName: row.teacherName,
+            subject: row.subject,
+            className: row.className,
+            notes: row.notes,
+        };
+
+        if (sadinSearchField === "all") {
+            return Object.values(fields).some((value) =>
+                normalizeSearch(value).includes(search)
+            );
+        }
+
+        return normalizeSearch(fields[sadinSearchField]).includes(search);
     }
 
     function addRow() {
@@ -35,6 +63,7 @@ export default function SadinSheetEditor({
         onUpdateRows(sheetRows.filter((_, rowIndex) => rowIndex !== index));
     }
 
+    const filteredSadinRows = sortedSheetRows.filter(rowMatchesSearch);
     return (
         <div className="sadin-editor">
             <div className="manager-header">
@@ -47,6 +76,43 @@ export default function SadinSheetEditor({
                 >
                     הוסף שורה
                 </button>
+
+                <div className="sadin-search-box">
+                    <label>
+                        חפש לפי:
+                        <select
+                            value={sadinSearchField}
+                            onChange={(e) => setSadinSearchField(e.target.value)}
+                        >
+                            <option value="all">הכל</option>
+                            <option value="teacherName">מורה</option>
+                            <option value="subject">מקצוע</option>
+                            <option value="className">כיתה</option>
+                            <option value="notes">הערות</option>
+                        </select>
+                    </label>
+
+                    <input
+                        type="text"
+                        value={sadinSearchText}
+                        onChange={(e) => setSadinSearchText(e.target.value)}
+                        placeholder="הקלד מילת חיפוש..."
+                    />
+
+                    {sadinSearchText && (
+                        <button
+                            type="button"
+                            className="mini-button"
+                            onClick={() => setSadinSearchText("")}
+                        >
+                            נקה
+                        </button>
+                    )}
+
+                    <span className="sadin-search-count">
+                        {filteredSadinRows.length} מתוך {sheetRows.length}
+                    </span>
+                </div>
             </div>
 
             <table className="manager-table sadin-table">
@@ -62,7 +128,7 @@ export default function SadinSheetEditor({
                 </thead>
 
                 <tbody>
-                    {sortedSheetRows.map((row) => {
+                    {filteredSadinRows.map((row) => {
                         const index = sheetRows.indexOf(row);
 
                         return (

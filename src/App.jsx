@@ -1948,50 +1948,6 @@ export default function App() {
     );
   }
 
-  /*
-  function isPurpleHoleCell(day, className, hour) {
-    if (className.includes("ישיבה") || isTeamMeetingRow(className)) {
-      console.log("purple meeting check", {
-        day,
-        className,
-        hour,
-        isTeamMeeting: isTeamMeetingRow(className),
-        unitsInThisCell: getCellUnitIds(day, className, hour),
-        allMeetingCellsToday: hours.map((h) => ({
-          hour: h,
-          unitIds: getCellUnitIds(day, className, h),
-        })),
-      });
-    }
-    if (isBlockedCell(className, day, hour)) return false;
-
-    const unitIds = getCellUnitIds(day, className, hour);
-
-    if (unitIds.length > 0) return false;
-
-    if (isTeamMeetingRow(className)) {
-      const maxHour = getMaxHoursForDay(day);
-
-      const meetingAlreadyScheduledToday = Array.from(
-        { length: maxHour },
-        (_, index) => index + 1
-      ).some((currentHour) => {
-        const currentUnitIds = getCellUnitIds(day, className, currentHour);
-        return currentUnitIds.length > 0;
-      });
-
-      if (meetingAlreadyScheduledToday) {
-        return false;
-      }
-    }
-
-    return !teachingUnits.some((unit) =>
-      canUnitFillCell(unit, day, className, hour)
-    );
-  }
-  */
-
-
   function canUnitFillCellInSchedule(unit, scheduleObject, day, className, hour) {
     if (!unit) return false;
 
@@ -2050,8 +2006,19 @@ export default function App() {
 
   function updateSadinRows(nextRows) {
     requestPurpleHoleCheck();
-    const nextUnits = buildTeachingUnitsFromSheetRows(nextRows);
-    const nextTeachingLoads = buildTeachingLoadsFromUnits(nextUnits, classes);
+
+    const regularUnits = buildTeachingUnitsFromSheetRows(nextRows);
+
+    const meetingUnits = teachingUnits.filter(
+      (unit) => unit.type === "teamMeeting"
+    );
+
+    const nextUnits = [...regularUnits, ...meetingUnits];
+
+    const nextTeachingLoads = buildTeachingLoadsFromUnits(
+      regularUnits,
+      classes
+    );
 
     setSchoolData((prev) => ({
       ...prev,
@@ -2062,7 +2029,6 @@ export default function App() {
     }));
 
     trimScheduleToUnitHours(nextUnits);
-
   }
 
   function getVisibleHoursForSelectedDay() {

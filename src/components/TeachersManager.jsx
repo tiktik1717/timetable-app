@@ -1,6 +1,7 @@
+import { useState } from "react";
 export default function TeachersManager({ teachers, setSchoolData, removeTeacherFromDay, requestPurpleHoleCheck, }) {
     const days = ["א", "ב", "ג", "ד", "ה", "ו"];
-
+    const [teacherSearchText, setTeacherSearchText] = useState("");
     const sortedTeachers = [...teachers].sort((a, b) =>
         a.name.localeCompare(b.name, "he")
     );
@@ -95,6 +96,12 @@ export default function TeachersManager({ teachers, setSchoolData, removeTeacher
         }));
     }
 
+    const normalizedTeacherSearch = teacherSearchText.trim().toLowerCase();
+
+    const filteredTeachers = sortedTeachers.filter((teacher) =>
+        teacher.name?.toLowerCase().includes(normalizedTeacherSearch)
+    );
+
     return (
         <div className="teachers-manager">
             <div className="manager-header">
@@ -103,6 +110,17 @@ export default function TeachersManager({ teachers, setSchoolData, removeTeacher
                 <button className="action-button" onClick={addTeacher}>
                     הוסף מורה
                 </button>
+                <div className="teacher-search-box">
+                    <label>
+                        חיפוש מורה:
+                        <input
+                            type="text"
+                            value={teacherSearchText}
+                            onChange={(e) => setTeacherSearchText(e.target.value)}
+                            placeholder="הקלד שם מורה..."
+                        />
+                    </label>
+                </div>
             </div>
 
             <table className="manager-table">
@@ -116,7 +134,7 @@ export default function TeachersManager({ teachers, setSchoolData, removeTeacher
                 </thead>
 
                 <tbody>
-                    {sortedTeachers.map((teacher) => (
+                    {filteredTeachers.map((teacher) => (
                         <tr key={teacher.id}>
                             <td>{teacher.id}</td>
 

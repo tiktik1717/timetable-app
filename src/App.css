@@ -1420,3 +1420,35 @@ body {
 .mini-button {
   margin-inline: 4px;
 }
+
+.teacher-search-box {
+  margin: 10px 0;
+}
+
+.teacher-search-box input {
+  margin-inline-start: 8px;
+  padding: 6px 8px;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+  min-width: 220px;
+}
+
+.sadin-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+
+.sadin-search-box input,
+.sadin-search-box select {
+  padding: 6px 8px;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+}
+
+.sadin-search-count {
+  font-size: 13px;
+  color: #555;
+}
