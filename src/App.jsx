@@ -4268,10 +4268,11 @@ export default function App() {
         {activeView === "freeDays" && (
           <FreeDaysView
             teachers={teachers}
+            classes={classes}
             days={days}
           />
         )}
-        
+
         {activeView === "file" && (
           <FileManager
             saveProjectToFile={saveProjectToFile}
