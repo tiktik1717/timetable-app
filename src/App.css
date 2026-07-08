@@ -1452,3 +1452,32 @@ body {
   font-size: 13px;
   color: #555;
 }
+
+.free-days-view {
+  padding: 16px;
+  direction: rtl;
+}
+
+.free-days-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.free-days-table th,
+.free-days-table td {
+  border: 1px solid #ccc;
+  padding: 8px;
+  text-align: center;
+  vertical-align: top;
+}
+
+.free-days-table th {
+  background: #e3f2fd;
+  font-weight: bold;
+}
+
+.free-days-count-row td {
+  background: #fff8e1;
+  font-weight: bold;
+}

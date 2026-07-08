@@ -40,6 +40,7 @@ import AuthPanel from "./components/AuthPanel";
 import { supabase } from "./services/supabaseClient";
 import ReactMarkdown from "react-markdown";
 import { HELP_TEXT } from "./helpText";
+import FreeDaysView from "./components/FreeDaysView";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -3724,6 +3725,12 @@ export default function App() {
               ניהול מורים
             </button>
             <button
+              className={activeView === "freeDays" ? "active" : ""}
+              onClick={() => setActiveView("freeDays")}
+            >
+              ימים חופשיים
+            </button>
+            <button
               className={activeView === "classes" ? "active-tab" : ""}
               onClick={() => setActiveView("classes")}
             >
@@ -4258,7 +4265,13 @@ export default function App() {
           />
         )}
 
-
+        {activeView === "freeDays" && (
+          <FreeDaysView
+            teachers={teachers}
+            days={days}
+          />
+        )}
+        
         {activeView === "file" && (
           <FileManager
             saveProjectToFile={saveProjectToFile}
