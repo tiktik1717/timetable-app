@@ -4,13 +4,13 @@ export default function FreeDaysView({ teachers, classes, days }) {
     const [showHomeroomOnly, setShowHomeroomOnly] = useState(false);
 
     const homeroomTeacherIds = new Set(
-        classes
-            .map((classItem) =>
-                typeof classItem === "string"
-                    ? null
-                    : classItem.homeroomTeacherId || classItem.teacherId
+        teachers
+            .filter(
+                (teacher) =>
+                    teacher.educationClass &&
+                    classes.includes(teacher.educationClass)
             )
-            .filter(Boolean)
+            .map((teacher) => teacher.id)
     );
 
     const relevantTeachers = showHomeroomOnly

@@ -3725,7 +3725,7 @@ export default function App() {
               ניהול מורים
             </button>
             <button
-              className={activeView === "freeDays" ? "active" : ""}
+              className={activeView === "freeDays" ? "active-tab" : ""}
               onClick={() => setActiveView("freeDays")}
             >
               ימים חופשיים
