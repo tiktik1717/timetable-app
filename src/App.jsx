@@ -416,6 +416,8 @@ export default function App() {
   }
 
   async function loadCloudProjectById(projectId) {
+  console.log("loadCloudProjectById התחילה", projectId);
+
     if (!user) {
       alert("יש להתחבר לפני טעינה מהענן");
       return false;
@@ -535,6 +537,11 @@ export default function App() {
   }
 
   async function handleCloudProjectSelection(projectId) {
+    console.log("בחירת פרויקט ענן", {
+      requestedProjectId: projectId,
+      currentProjectId: selectedCloudProjectId,
+      hasUnsavedCloudChanges,
+    });
     if (!projectId) {
       setSelectedCloudProjectId("");
       return;
