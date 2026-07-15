@@ -257,6 +257,10 @@ export default function App() {
   });
 
   useEffect(() => {
+    if (isLoadingCloudProjectRef.current) {
+      return;
+    }
+
     if (selectedCloudProjectId) {
       setHasUnsavedCloudChanges(true);
     }
@@ -267,6 +271,7 @@ export default function App() {
     checkpoints,
     currentCheckpointId,
     comparisonCheckpointId,
+    selectedCloudProjectId,
   ]);
 
   const {
@@ -307,6 +312,7 @@ export default function App() {
   const historyRef = useRef(history);
   const futureRef = useRef(future);
   const tableScrollRef = useRef(null);
+  const isLoadingCloudProjectRef = useRef(false);
 
   useEffect(() => {
     scheduleRef.current = schedule;
@@ -411,63 +417,120 @@ export default function App() {
   async function loadCloudProjectById(projectId) {
     if (!user) {
       alert("יש להתחבר לפני טעינה מהענן");
-      return;
+      return false;
     }
 
-    if (!projectId) return;
+    if (!projectId) return false;
 
-    const { data, error } = await supabase
-      .from("projects")
-      .select("id, name, data")
-      .eq("id", projectId)
-      .single();
+    isLoadingCloudProjectRef.current = true;
 
-    if (error) {
-      alert("טעינת הפרויקט נכשלה: " + error.message);
-      return;
+    try {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, name, data")
+        .eq("id", projectId)
+        .single();
+
+      if (error) {
+        alert("טעינת הפרויקט נכשלה: " + error.message);
+        return false;
+      }
+
+      const projectData = data.data || {};
+
+      const normalizedSchoolData = ensureDailyHoursForClasses(
+        projectData.schoolData
+      );
+
+      const nextCheckpoints = Array.isArray(projectData.checkpoints)
+        ? projectData.checkpoints
+        : [];
+
+
+      console.log("נקודות שמירה שנטענו מהפרויקט", {
+        projectName: data.name,
+        count: nextCheckpoints.length,
+        checkpoints: nextCheckpoints,
+      });
+      const nextCurrentCheckpointId =
+        nextCheckpoints.some(
+          (checkpoint) =>
+            checkpoint.id === projectData.currentCheckpointId
+        )
+          ? projectData.currentCheckpointId
+          : "";
+
+      const nextComparisonCheckpointId =
+        nextCheckpoints.some(
+          (checkpoint) =>
+            checkpoint.id === projectData.comparisonCheckpointId
+        )
+          ? projectData.comparisonCheckpointId
+          : "";
+
+      setSchoolData(normalizedSchoolData);
+      setSchedule(projectData.schedule || {});
+      setTeacherHighlights(
+        projectData.teacherHighlights ||
+          createDefaultTeacherHighlights()
+      );
+
+      // רשימת נקודות שמירה חדשה ונפרדת לפרויקט שנטען
+      setCheckpoints([...nextCheckpoints]);
+      setCurrentCheckpointId(nextCurrentCheckpointId);
+      setComparisonCheckpointId(nextComparisonCheckpointId);
+
+      setHistory([]);
+      setFuture([]);
+
+      setSelectedCloudProjectId(projectId);
+      setHasUnsavedCloudChanges(false);
+      setLastCloudSavedAt(
+        new Date().toLocaleTimeString("he-IL")
+      );
+
+      localStorage.setItem(
+        "schoolData",
+        JSON.stringify(normalizedSchoolData)
+      );
+      localStorage.setItem(
+        "schoolSchedule",
+        JSON.stringify(projectData.schedule || {})
+      );
+      localStorage.setItem(
+        "teacherHighlights",
+        JSON.stringify(
+          projectData.teacherHighlights ||
+            createDefaultTeacherHighlights()
+        )
+      );
+      localStorage.setItem(
+        "checkpoints",
+        JSON.stringify(nextCheckpoints)
+      );
+      localStorage.setItem(
+        "currentCheckpointId",
+        nextCurrentCheckpointId
+      );
+      localStorage.setItem(
+        "comparisonCheckpointId",
+        nextComparisonCheckpointId
+      );
+      localStorage.setItem(
+        "selectedCloudProjectId",
+        projectId
+      );
+
+      alert(`הפרויקט "${data.name}" נטען מהענן`);
+      return true;
+    } finally {
+      // מאפשר ל־React לסיים את עדכוני ה־state לפני שמחזירים
+      // את המערכת למצב שבו שינויים מסומנים כלא שמורים.
+      setTimeout(() => {
+        isLoadingCloudProjectRef.current = false;
+        setHasUnsavedCloudChanges(false);
+      }, 0);
     }
-
-    const projectData = data.data;
-
-    const normalizedSchoolData = ensureDailyHoursForClasses(
-      projectData.schoolData
-    );
-
-    setSchoolData(normalizedSchoolData);
-    setSchedule(projectData.schedule || {});
-    setTeacherHighlights(
-      projectData.teacherHighlights || createDefaultTeacherHighlights()
-    );
-    setCheckpoints(projectData.checkpoints || []);
-    setCurrentCheckpointId(projectData.currentCheckpointId || "");
-    setComparisonCheckpointId(projectData.comparisonCheckpointId || "");
-
-    setHistory([]);
-    setFuture([]);
-
-    localStorage.setItem("schoolData", JSON.stringify(normalizedSchoolData));
-    localStorage.setItem(
-      "schoolSchedule",
-      JSON.stringify(projectData.schedule || {})
-    );
-    localStorage.setItem(
-      "teacherHighlights",
-      JSON.stringify(
-        projectData.teacherHighlights || createDefaultTeacherHighlights()
-      )
-    );
-    localStorage.setItem("checkpoints", JSON.stringify(projectData.checkpoints || []));
-    localStorage.setItem("currentCheckpointId", projectData.currentCheckpointId || "");
-    localStorage.setItem(
-      "comparisonCheckpointId",
-      projectData.comparisonCheckpointId || ""
-    );
-
-    setSelectedCloudProjectId(projectId);
-    setHasUnsavedCloudChanges(false);
-    setLastCloudSavedAt(new Date().toLocaleTimeString("he-IL"));
-
-    alert(`הפרויקט "${data.name}" נטען מהענן`);
   }
 
   async function handleCloudProjectSelection(projectId) {
@@ -588,6 +651,7 @@ export default function App() {
     await loadCloudProjects();
   }
 
+  /*
   async function loadSelectedCloudProject() {
     if (!user) {
       alert("יש להתחבר לפני טעינה מהענן");
@@ -642,7 +706,7 @@ export default function App() {
     setLastCloudSavedAt(new Date().toLocaleTimeString("he-IL"));
     alert(`הפרויקט "${data.name}" נטען מהענן`);
   }
-
+  */
 
   async function deleteSelectedCloudProject() {
     if (!selectedCloudProjectId) {
