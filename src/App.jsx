@@ -416,7 +416,6 @@ export default function App() {
   }
 
   async function loadCloudProjectById(projectId) {
-  console.log("loadCloudProjectById התחילה", projectId);
 
     if (!user) {
       alert("יש להתחבר לפני טעינה מהענן");
@@ -449,12 +448,6 @@ export default function App() {
         ? projectData.checkpoints
         : [];
 
-
-      console.log("נקודות שמירה שנטענו מהפרויקט", {
-        projectName: data.name,
-        count: nextCheckpoints.length,
-        checkpoints: nextCheckpoints,
-      });
       const nextCurrentCheckpointId =
         nextCheckpoints.some(
           (checkpoint) =>
@@ -537,11 +530,7 @@ export default function App() {
   }
 
   async function handleCloudProjectSelection(projectId) {
-    console.log("בחירת פרויקט ענן", {
-      requestedProjectId: projectId,
-      currentProjectId: selectedCloudProjectId,
-      hasUnsavedCloudChanges,
-    });
+
     if (!projectId) {
       setSelectedCloudProjectId("");
       return;
