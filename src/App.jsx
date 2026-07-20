@@ -175,15 +175,37 @@ export default function App() {
     } = supabase.auth.onAuthStateChange((event, session) => {
       console.log("Supabase auth event:", event);
 
-      // מעדכנים את המשתמש רק באירועי התחברות/התנתקות ממשיים.
-      // לא ב-TOKEN_REFRESHED ולא בחזרה ללשונית.
+      if (!mounted) {
+        return;
+      }
+
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        return;
+      }
+
       if (
         event === "SIGNED_IN" ||
-        event === "SIGNED_OUT" ||
         event === "USER_UPDATED"
       ) {
-        setUser(session?.user || null);
+        const nextUser = session?.user || null;
+
+        setUser((currentUser) => {
+          // אם זה אותו משתמש שכבר מחובר,
+          // לא יוצרים אובייקט user חדש ולא מפעילים effects מחדש.
+          if (currentUser?.id === nextUser?.id) {
+            return currentUser;
+          }
+
+          return nextUser;
+        });
       }
+
+      // מתעלמים לצורך state של המשתמש מ:
+      // INITIAL_SESSION
+      // TOKEN_REFRESHED
+      // PASSWORD_RECOVERY
+      // MFA_CHALLENGE_VERIFIED
     });
 
     return () => {
