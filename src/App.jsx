@@ -478,6 +478,7 @@ export default function App() {
     projectId,
     options = {}
   ) {
+    console.trace("loadCloudProjectById");
     const { showAlert = true, forceReload = false } = options;
 
     if (
