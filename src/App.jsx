@@ -153,21 +153,42 @@ export default function App() {
   });
 
   useEffect(() => {
-    async function loadSession() {
-      const { data } = await supabase.auth.getSession();
-      setUser(data.session?.user || null);
+    let mounted = true;
+
+    async function initializeAuth() {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error("טעינת session נכשלה:", error);
+        return;
+      }
+
+      if (mounted) {
+        setUser(data.session?.user || null);
+      }
     }
 
-    loadSession();
+    initializeAuth();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Supabase auth event:", event);
+
+      // מעדכנים את המשתמש רק באירועי התחברות/התנתקות ממשיים.
+      // לא ב-TOKEN_REFRESHED ולא בחזרה ללשונית.
+      if (
+        event === "SIGNED_IN" ||
+        event === "SIGNED_OUT" ||
+        event === "USER_UPDATED"
+      ) {
         setUser(session?.user || null);
       }
-    );
+    });
 
     return () => {
-      listener.subscription.unsubscribe();
+      mounted = false;
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -314,6 +335,8 @@ export default function App() {
   const futureRef = useRef(future);
   const tableScrollRef = useRef(null);
   const isLoadingCloudProjectRef = useRef(false);
+  const cloudInitializedForUserRef = useRef(null);
+  const loadedCloudProjectIdRef = useRef(null);
 
   useEffect(() => {
     scheduleRef.current = schedule;
@@ -336,23 +359,37 @@ export default function App() {
 
   useEffect(() => {
     async function initializeCloudProjects() {
-      if (!user) {
+      const userId = user?.id;
+
+      if (!userId) {
         setCloudProjects([]);
         setSelectedCloudProjectId("");
+        cloudInitializedForUserRef.current = null;
         return;
       }
 
+      // אותו משתמש כבר אותחל בסשן הנוכחי.
+      // לא טוענים שוב בגלל מעבר טאבים או רענון token.
+      if (cloudInitializedForUserRef.current === userId) {
+        return;
+      }
+
+      cloudInitializedForUserRef.current = userId;
+
       await loadCloudProjects();
 
-      const savedProjectId = localStorage.getItem("selectedCloudProjectId");
+      const savedProjectId =
+        localStorage.getItem("selectedCloudProjectId");
 
       if (savedProjectId) {
-        await loadCloudProjectById(savedProjectId);
+        await loadCloudProjectById(savedProjectId, {
+          showAlert: false,
+        });
       }
     }
 
     initializeCloudProjects();
-  }, [user]);
+  }, [user?.id]);
 
 
   useEffect(() => {
@@ -415,8 +452,21 @@ export default function App() {
     };
   }
 
-  async function loadCloudProjectById(projectId) {
+  async function loadCloudProjectById(
+    projectId,
+    options = {}
+  ) {
+    const { showAlert = true, forceReload = false } = options;
 
+    if (
+      !forceReload &&
+      loadedCloudProjectIdRef.current === projectId
+    ) {
+      console.log("הפרויקט כבר טעון — דילוג על טעינה חוזרת");
+      return true;
+    }
+
+    const { showAlert = true } = options;
     if (!user) {
       alert("יש להתחבר לפני טעינה מהענן");
       return false;
@@ -468,7 +518,7 @@ export default function App() {
       setSchedule(projectData.schedule || {});
       setTeacherHighlights(
         projectData.teacherHighlights ||
-          createDefaultTeacherHighlights()
+        createDefaultTeacherHighlights()
       );
 
       // רשימת נקודות שמירה חדשה ונפרדת לפרויקט שנטען
@@ -480,6 +530,7 @@ export default function App() {
       setFuture([]);
 
       setSelectedCloudProjectId(projectId);
+      loadedCloudProjectIdRef.current = projectId;
       setHasUnsavedCloudChanges(false);
       setLastCloudSavedAt(
         new Date().toLocaleTimeString("he-IL")
@@ -497,7 +548,7 @@ export default function App() {
         "teacherHighlights",
         JSON.stringify(
           projectData.teacherHighlights ||
-            createDefaultTeacherHighlights()
+          createDefaultTeacherHighlights()
         )
       );
       localStorage.setItem(
@@ -517,7 +568,9 @@ export default function App() {
         projectId
       );
 
-      alert(`הפרויקט "${data.name}" נטען מהענן`);
+      if (showAlert) {
+        alert(`הפרויקט "${data.name}" נטען מהענן`);
+      }
       return true;
     } finally {
       // מאפשר ל־React לסיים את עדכוני ה־state לפני שמחזירים
