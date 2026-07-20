@@ -592,7 +592,7 @@ export default function App() {
       );
 
       if (showAlert) {
-        alert(`הפרויקט "${data.name}" נטען מהענן`);
+        alert(`הפרויקט "${data.name}" נטען מהענן2`);
       }
       return true;
     } finally {
