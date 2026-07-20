@@ -112,6 +112,7 @@ export default function App() {
   const [activePlacementUnitId, setActivePlacementUnitId] = useState(null);
   const [dragOriginCell, setDragOriginCell] = useState(null);
   const pendingPurpleHoleCheckRef = useRef(null);
+  const [authInitialized, setAuthInitialized] = useState(false);
   const [rowHeightOffset, setRowHeightOffset] = useState(() => {
     return Number(localStorage.getItem("rowHeightOffset")) || 0;
   });
@@ -156,15 +157,21 @@ export default function App() {
     let mounted = true;
 
     async function initializeAuth() {
-      const { data, error } = await supabase.auth.getSession();
+      try {
+        const { data, error } = await supabase.auth.getSession();
 
-      if (error) {
-        console.error("טעינת session נכשלה:", error);
-        return;
-      }
+        if (error) {
+          console.error("טעינת session נכשלה:", error);
+          return;
+        }
 
-      if (mounted) {
-        setUser(data.session?.user || null);
+        if (mounted) {
+          setUser(data.session?.user || null);
+        }
+      } finally {
+        if (mounted) {
+          setAuthInitialized(true);
+        }
       }
     }
 
@@ -227,10 +234,12 @@ export default function App() {
   }, [rowHeightOffset]);
 
   useEffect(() => {
-    localStorage.setItem(
-      "selectedCloudProjectId",
-      selectedCloudProjectId || ""
-    );
+    if (selectedCloudProjectId) {
+      localStorage.setItem(
+        "selectedCloudProjectId",
+        selectedCloudProjectId
+      );
+    }
   }, [selectedCloudProjectId]);
 
   useEffect(() => {
@@ -381,37 +390,59 @@ export default function App() {
 
   useEffect(() => {
     async function initializeCloudProjects() {
+      // עדיין מחכים ל-Supabase שיבדוק את ה-session.
+      // אסור בשלב הזה לנקות את הפרויקט האחרון.
+      if (!authInitialized) {
+        return;
+      }
+
       const userId = user?.id;
 
       if (!userId) {
         setCloudProjects([]);
         setSelectedCloudProjectId("");
         cloudInitializedForUserRef.current = null;
+        loadedCloudProjectIdRef.current = null;
         return;
       }
 
       // אותו משתמש כבר אותחל בסשן הנוכחי.
-      // לא טוענים שוב בגלל מעבר טאבים או רענון token.
       if (cloudInitializedForUserRef.current === userId) {
         return;
       }
 
-      cloudInitializedForUserRef.current = userId;
+      try {
+        await loadCloudProjects();
 
-      await loadCloudProjects();
+        const savedProjectId =
+          localStorage.getItem("selectedCloudProjectId");
 
-      const savedProjectId =
-        localStorage.getItem("selectedCloudProjectId");
+        if (savedProjectId) {
+          const loadedSuccessfully =
+            await loadCloudProjectById(savedProjectId, {
+              showAlert: false,
+            });
 
-      if (savedProjectId) {
-        await loadCloudProjectById(savedProjectId, {
-          showAlert: false,
-        });
+          if (!loadedSuccessfully) {
+            console.warn(
+              "לא ניתן היה לטעון את פרויקט הענן האחרון:",
+              savedProjectId
+            );
+          }
+        }
+
+        // מסמנים כמאותחל רק אחרי שתהליך האתחול הסתיים.
+        cloudInitializedForUserRef.current = userId;
+      } catch (error) {
+        console.error("אתחול פרויקטי הענן נכשל:", error);
+
+        // מאפשר ניסיון נוסף אם האתחול נכשל.
+        cloudInitializedForUserRef.current = null;
       }
     }
 
     initializeCloudProjects();
-  }, [user?.id]);
+  }, [authInitialized, user?.id]);
 
 
   useEffect(() => {
