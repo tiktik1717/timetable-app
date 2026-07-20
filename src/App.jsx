@@ -1917,11 +1917,32 @@ export default function App() {
     };
   }
 
-  function buildTeachingUnitsFromSheetRows(sheetRows) {
+  function buildTeachingUnitsFromSheetRows(
+    sheetRows,
+    existingUnits = []
+  ) {
     const mergedMap = new Map();
 
+    // היחידות הקיימות לפי צירוף יציב של כיתה ומורה
+    const existingUnitsByKey = new Map(
+      existingUnits
+        .filter((unit) => unit.type !== "teamMeeting")
+        .map((unit) => [
+          `${unit.className}|${unit.teacherId}`,
+          unit,
+        ])
+    );
+
     for (const row of sheetRows) {
-      if (!row.teacherId || !row.className || Number(row.hours) <= 0) continue;
+      const hours = Number(row.hours) || 0;
+
+      if (
+        !row.teacherId ||
+        !row.className ||
+        hours <= 0
+      ) {
+        continue;
+      }
 
       const key = `${row.className}|${row.teacherId}`;
 
@@ -1931,17 +1952,36 @@ export default function App() {
           teacherId: row.teacherId,
           subject: "רגיל",
           hours: 0,
-          constraintGroupId: null,
         });
       }
 
-      mergedMap.get(key).hours += Number(row.hours) || 0;
+      mergedMap.get(key).hours += hours;
     }
 
-    return [...mergedMap.values()].map((row, index) => ({
-      id: `base-${row.className}-${row.teacherId}-${index}`,
-      ...row,
-    }));
+    return [...mergedMap.entries()].map(([key, rebuiltUnit]) => {
+      const existingUnit = existingUnitsByKey.get(key);
+
+      return {
+        // שומר את כל המידע הקיים:
+        // קבוצת שיבוץ, מאפיינים מיוחדים ומטא-דאטה
+        ...(existingUnit || {}),
+
+        // שומר את המזהה הישן, כדי ששיבוצים קיימים לא יתנתקו
+        id:
+          existingUnit?.id ||
+          `base-${rebuiltUnit.className}-${rebuiltUnit.teacherId}`,
+
+        // הנתונים האלה מתעדכנים לפי הסדין
+        className: rebuiltUnit.className,
+        teacherId: rebuiltUnit.teacherId,
+        subject: rebuiltUnit.subject,
+        hours: rebuiltUnit.hours,
+
+        // ליחידה חדשה בלבד אין עדיין קבוצת שיבוץ
+        constraintGroupId:
+          existingUnit?.constraintGroupId ?? null,
+      };
+    });
   }
 
   function buildTeachingLoadsFromUnits(units, classes) {
@@ -2175,8 +2215,12 @@ export default function App() {
   function updateSadinRows(nextRows) {
     requestPurpleHoleCheck();
 
-    const regularUnits = buildTeachingUnitsFromSheetRows(nextRows);
-
+    const regularUnits =
+      buildTeachingUnitsFromSheetRows(
+        nextRows,
+        teachingUnits
+      );
+      
     const meetingUnits = teachingUnits.filter(
       (unit) => unit.type === "teamMeeting"
     );
