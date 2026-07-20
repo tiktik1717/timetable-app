@@ -489,7 +489,7 @@ export default function App() {
       return true;
     }
 
-    const { showAlert = true } = options;
+
     if (!user) {
       alert("יש להתחבר לפני טעינה מהענן");
       return false;
