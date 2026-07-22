@@ -27,6 +27,7 @@ import WarningsPanel from "./components/WarningsPanel";
 import ConstraintGroupDialog from "./components/ConstraintGroupDialog";
 import ShahafView from "./components/ShahafView";
 import TeacherView from "./components/TeacherView";
+import GroupConstraintsView from "./components/GroupConstraintsView";
 import TeachersManager from "./components/TeachersManager";
 import ClassesManager from "./components/ClassesManager";
 import MeetingsManager from "./components/MeetingsManager";
@@ -961,6 +962,10 @@ export default function App() {
 
     if (!group) return false;
 
+    if (isConstraintGroupBlockedAt(unit.constraintGroupId, day, hour)) {
+      return true;
+    }
+
     if (hasRule(group, "notSameDaySameClass")) {
       const classHours = getClassHoursForDay(className, day);
 
@@ -1030,6 +1035,17 @@ export default function App() {
 
     for (const unit of units) {
       const isActiveUnit = unit.id === activeUnit.id;
+
+      const groupTimeBlocked = isUnitConstraintGroupBlockedAt(unit, day, hour);
+
+      if (groupTimeBlocked) {
+        if (isActiveUnit) {
+          return "groupBlocked";
+        }
+
+        hasGroupProblem = true;
+        continue;
+      }
 
       const isBlockedOrFree =
         isTeacherBlockedHour(unit.teacherId, day, hour) ||
@@ -1587,6 +1603,20 @@ export default function App() {
     );
   }
 
+  function isConstraintGroupBlockedAt(groupId, day, hour) {
+    if (!groupId) return false;
+
+    const group = getConstraintGroupById(groupId);
+    if (!group) return false;
+
+    const blockedHoursForDay = group.blockedSlots?.[normalizeDay(day)] || [];
+    return blockedHoursForDay.includes(Number(hour));
+  }
+
+  function isUnitConstraintGroupBlockedAt(unit, day, hour) {
+    return isConstraintGroupBlockedAt(unit?.constraintGroupId, day, hour);
+  }
+
   function restoreCheckpoint(checkpointId) {
     const checkpoint = checkpoints.find((item) => item.id === checkpointId);
 
@@ -1626,6 +1656,11 @@ export default function App() {
       return;
     }
 
+    if (isUnitConstraintGroupBlockedAt(unit, selectedDay, hour)) {
+      alert("לא ניתן לשבץ את קבוצת השיבוץ ביום ובשעה שנחסמו עבורה");
+      return;
+    }
+
     if (!canTeacherWorkAt(unit.teacherId, selectedDay, hour)) {
       alert("לא ניתן לשבץ מורה ביום החופשי שלו");
       return;
@@ -1650,12 +1685,21 @@ export default function App() {
         return true;
       }
 
+      if (isUnitConstraintGroupBlockedAt(candidate, selectedDay, hour)) {
+        return true;
+      }
+
       if (!canTeacherWorkAt(candidate.teacherId, selectedDay, hour)) {
         return true;
       }
 
       return false;
     });
+
+    if (invalidUnits.length > 0) {
+      alert("לא ניתן לשבץ את כל יחידות הקבוצה בשעה שנבחרה");
+      return;
+    }
 
     placeUnitsByClassAtHour(unitsToPlace, String(hour), false);
   }
@@ -1712,6 +1756,10 @@ export default function App() {
     const group = getConstraintGroupById(unit.constraintGroupId);
 
     if (!group) return false;
+
+    if (isConstraintGroupBlockedAt(unit.constraintGroupId, day, hour)) {
+      return true;
+    }
 
     // אסור באותה שורה: לא עוד יחידה מאותה קבוצה באותה כיתה באותו יום
     if (hasRule(group, "notSameDaySameClass")) {
@@ -2401,6 +2449,174 @@ export default function App() {
     }
 
     return null;
+  }
+
+  function getScheduledUnitsForConstraintGroupAt(groupId, day, hour) {
+    const scheduled = [];
+
+    for (const className of classes) {
+      const unitIds = getCellUnitIds(day, className, hour);
+
+      for (const unitId of unitIds) {
+        const unit = getUnitById(unitId);
+        if (unit?.constraintGroupId === groupId) {
+          scheduled.push({ unit, className });
+        }
+      }
+    }
+
+    return scheduled;
+  }
+
+  function removeConstraintGroupFromSpecificTime(groupId, day, hour) {
+    let removedCount = 0;
+
+    updateScheduleWithHistory((prev) => {
+      const nextSchedule = structuredClone(prev);
+
+      for (const className of classes) {
+        const currentIds = getCellUnitIdsFromSchedule(
+          nextSchedule,
+          day,
+          className,
+          hour
+        );
+
+        const nextIds = currentIds.filter((unitId) => {
+          const unit = getUnitById(unitId);
+          const shouldRemove = unit?.constraintGroupId === groupId;
+          if (shouldRemove) removedCount += 1;
+          return !shouldRemove;
+        });
+
+        setCellUnitIds(nextSchedule, day, className, hour, nextIds);
+      }
+
+      return nextSchedule;
+    });
+
+    return removedCount;
+  }
+
+  function toggleConstraintGroupBlockedSlot(groupId, day, hour) {
+    const normalizedDay = normalizeDay(day);
+    const hourNumber = Number(hour);
+    const wasBlocked = isConstraintGroupBlockedAt(groupId, normalizedDay, hourNumber);
+
+    if (!wasBlocked) {
+      const scheduledUnits = getScheduledUnitsForConstraintGroupAt(
+        groupId,
+        normalizedDay,
+        hourNumber
+      );
+
+      if (scheduledUnits.length > 0) {
+        const shouldContinue = confirm(
+          `בזמן זה קיימים ${scheduledUnits.length} שיבוצים מהקבוצה. חסימת הזמן תסיר אותם מהמערכת. להמשיך?`
+        );
+
+        if (!shouldContinue) return;
+
+        requestPurpleHoleCheck();
+        removeConstraintGroupFromSpecificTime(
+          groupId,
+          normalizedDay,
+          hourNumber
+        );
+      }
+    }
+
+    setSchoolData((prev) => ({
+      ...prev,
+      constraintGroups: (prev.constraintGroups || []).map((group) => {
+        if (group.id !== groupId) return group;
+
+        const blockedSlots = { ...(group.blockedSlots || {}) };
+        const dayHours = blockedSlots[normalizedDay] || [];
+
+        blockedSlots[normalizedDay] = wasBlocked
+          ? dayHours.filter((item) => Number(item) !== hourNumber)
+          : [...new Set([...dayHours.map(Number), hourNumber])].sort((a, b) => a - b);
+
+        return { ...group, blockedSlots };
+      }),
+    }));
+  }
+
+  function setAllConstraintGroupSlotsBlocked(groupId, shouldBlock) {
+    const group = getConstraintGroupById(groupId);
+    if (!group) return;
+
+    if (shouldBlock) {
+      let scheduledCount = 0;
+
+      for (const day of days) {
+        for (const hour of hours) {
+          scheduledCount += getScheduledUnitsForConstraintGroupAt(
+            groupId,
+            day,
+            hour
+          ).length;
+        }
+      }
+
+      if (scheduledCount > 0) {
+        const shouldContinue = confirm(
+          `בקבוצה קיימים ${scheduledCount} שיבוצים. חסימת כל הזמנים תסיר אותם מהמערכת. להמשיך?`
+        );
+
+        if (!shouldContinue) return;
+
+        requestPurpleHoleCheck();
+
+        updateScheduleWithHistory((prev) => {
+          const nextSchedule = structuredClone(prev);
+
+          for (const day of days) {
+            for (const className of classes) {
+              for (const hour of hours) {
+                const currentIds = getCellUnitIdsFromSchedule(
+                  nextSchedule,
+                  day,
+                  className,
+                  hour
+                );
+
+                const nextIds = currentIds.filter((unitId) => {
+                  const unit = getUnitById(unitId);
+                  return unit?.constraintGroupId !== groupId;
+                });
+
+                if (nextIds.length !== currentIds.length) {
+                  setCellUnitIds(
+                    nextSchedule,
+                    day,
+                    className,
+                    hour,
+                    nextIds
+                  );
+                }
+              }
+            }
+          }
+
+          return nextSchedule;
+        });
+      }
+    }
+
+    const blockedSlots = shouldBlock
+      ? Object.fromEntries(
+          days.map((day) => [normalizeDay(day), hours.map(Number)])
+        )
+      : {};
+
+    setSchoolData((prev) => ({
+      ...prev,
+      constraintGroups: (prev.constraintGroups || []).map((item) =>
+        item.id === groupId ? { ...item, blockedSlots } : item
+      ),
+    }));
   }
 
   function saveConstraintGroup(groupToSave) {
@@ -3265,7 +3481,10 @@ export default function App() {
   }
 
   function canPlaceUnitAt(unit, day, hour) {
-    return canTeacherWorkAt(unit.teacherId, day, hour);
+    return (
+      !isUnitConstraintGroupBlockedAt(unit, day, hour) &&
+      canTeacherWorkAt(unit.teacherId, day, hour)
+    );
   }
 
   //return getRemainingUnitHours(unit.id) > 0;
@@ -3613,6 +3832,27 @@ export default function App() {
       return;
     }
 
+    const draggedUnitIdsForGroupTimeCheck =
+      data?.source === "load"
+        ? [data.unitId]
+        : singleDragUnitId
+          ? [singleDragUnitId]
+          : data?.unitIds || [];
+
+    const blockedGroupUnit = draggedUnitIdsForGroupTimeCheck
+      .map(getUnitById)
+      .find((unit) =>
+        isUnitConstraintGroupBlockedAt(unit, selectedDay, toHour)
+      );
+
+    if (blockedGroupUnit) {
+      const group = getConstraintGroupById(blockedGroupUnit.constraintGroupId);
+      alert(
+        `לא ניתן לשבץ בזמן זה: קבוצת ${group?.name || "השיבוץ"} חסומה.`
+      );
+      return;
+    }
+
     const beforePurpleHoles = getPurpleHolesForDayFromSchedule(
       schedule,
       selectedDay
@@ -3699,6 +3939,10 @@ export default function App() {
           return true;
         }
 
+        if (isUnitConstraintGroupBlockedAt(candidate, selectedDay, toHour)) {
+          return true;
+        }
+
         if (!canTeacherWorkAt(candidate.teacherId, selectedDay, toHour)) {
           return true;
         }
@@ -3718,6 +3962,11 @@ export default function App() {
 
             if (isCellLocked(selectedDay, candidate.className, toHour)) {
               return `${teacherName} (${candidate.className}) — התא נעול`;
+            }
+
+            if (isUnitConstraintGroupBlockedAt(candidate, selectedDay, toHour)) {
+              const group = getConstraintGroupById(candidate.constraintGroupId);
+              return `${teacherName} (${candidate.className}) — קבוצת ${group?.name || "השיבוץ"} חסומה בזמן זה`;
             }
 
             if (isTeacherBlockedHour(candidate.teacherId, selectedDay, toHour)) {
@@ -3940,6 +4189,12 @@ export default function App() {
               onClick={() => setActiveView("freeDays")}
             >
               ימים חופשיים
+            </button>
+            <button
+              className={activeView === "groupConstraints" ? "active-tab" : ""}
+              onClick={() => setActiveView("groupConstraints")}
+            >
+              אילוצי קבוצות
             </button>
             <button
               className={activeView === "classes" ? "active-tab" : ""}
@@ -4481,6 +4736,17 @@ export default function App() {
             teachers={teachers}
             classes={classes}
             days={days}
+          />
+        )}
+
+        {activeView === "groupConstraints" && (
+          <GroupConstraintsView
+            constraintGroups={constraintGroups}
+            days={days}
+            hours={hours}
+            isGroupBlockedAt={isConstraintGroupBlockedAt}
+            onToggleSlot={toggleConstraintGroupBlockedSlot}
+            onSetAllSlots={setAllConstraintGroupSlotsBlocked}
           />
         )}
 

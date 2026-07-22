@@ -1481,3 +1481,85 @@ body {
   background: #fff8e1;
   font-weight: bold;
 }
+/* Group time constraints */
+.group-constraints-view {
+  padding: 16px;
+  direction: rtl;
+}
+
+.group-constraints-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.group-constraints-header h3 {
+  margin: 0 0 0 12px;
+}
+
+.group-constraints-header label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.group-constraints-header select {
+  min-width: 190px;
+}
+
+.group-constraints-summary {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #eef4ff;
+  font-weight: 600;
+}
+
+.group-constraints-note,
+.group-constraints-empty {
+  margin: 10px 0 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f5f5f5;
+}
+
+.group-constraints-table {
+  width: 100%;
+  max-width: 900px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.group-constraints-table th,
+.group-constraints-table td {
+  border: 1px solid #bdbdbd;
+  text-align: center;
+  padding: 10px 6px;
+}
+
+.group-constraints-table th,
+.group-constraints-hour {
+  background: #f0f0f0;
+  font-weight: 700;
+}
+
+.group-constraints-cell {
+  background: #fff;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.12s ease;
+}
+
+.group-constraints-cell:hover {
+  background: #e8f5e9;
+}
+
+.group-constraints-cell.group-constraints-blocked {
+  background: #171717;
+  color: #fff;
+}
+
+.group-constraints-cell.group-constraints-blocked:hover {
+  background: #333;
+}
