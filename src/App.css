@@ -1563,3 +1563,75 @@ body {
 .group-constraints-cell.group-constraints-blocked:hover {
   background: #333;
 }
+
+/* Scheduling progress panel */
+.scheduling-progress-panel {
+  background: #f7fbff;
+  border: 1px solid #90caf9;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 6px;
+}
+
+.scheduling-progress-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scheduling-progress-heading h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.scheduling-progress-heading strong {
+  font-size: 16px;
+}
+
+.scheduling-progress-track {
+  width: 100%;
+  height: 18px;
+  overflow: hidden;
+  margin: 9px 0 7px;
+  border: 1px solid #b8b8b8;
+  border-radius: 999px;
+  background: #eeeeee;
+  direction: ltr;
+}
+
+.scheduling-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 0.25s ease;
+}
+
+.scheduling-progress-main {
+  font-weight: 700;
+  text-align: center;
+}
+
+.scheduling-progress-details {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 7px;
+  font-size: 13px;
+}
+
+.scheduling-progress-low {
+  background: #d32f2f;
+}
+
+.scheduling-progress-medium {
+  background: #ef6c00;
+}
+
+.scheduling-progress-good {
+  background: #f9a825;
+}
+
+.scheduling-progress-high {
+  background: #2e7d32;
+}

@@ -42,6 +42,7 @@ import { supabase } from "./services/supabaseClient";
 import ReactMarkdown from "react-markdown";
 import { HELP_TEXT } from "./helpText";
 import FreeDaysView from "./components/FreeDaysView";
+import SchedulingProgressPanel from "./components/SchedulingProgressPanel";
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -124,6 +125,7 @@ export default function App() {
     dailyBalance: true,
     purpleHoleAlerts: true,
     difficultyHints: false,
+    progress: true,
   });
   const [hasUnsavedCloudChanges, setHasUnsavedCloudChanges] = useState(false);
   const [lastCloudSavedAt, setLastCloudSavedAt] = useState(null);
@@ -4055,6 +4057,44 @@ export default function App() {
   const warnings = getWarnings();
   const visibleHours = getVisibleHoursForSelectedDay();
 
+  const schedulingProgress = (() => {
+    let totalHours = 0;
+    let placedHours = 0;
+    let incompleteUnits = 0;
+
+    for (const unit of teachingUnits) {
+      const requiredHours = Math.max(0, Number(unit.hours) || 0);
+
+      if (requiredHours <= 0) continue;
+
+      const scheduledHours = Math.min(
+        requiredHours,
+        countScheduledUnitHours(unit.id, schedule)
+      );
+
+      totalHours += requiredHours;
+      placedHours += scheduledHours;
+
+      if (scheduledHours < requiredHours) {
+        incompleteUnits += 1;
+      }
+    }
+
+    const remainingHours = Math.max(0, totalHours - placedHours);
+    const percentage =
+      totalHours === 0
+        ? 0
+        : Math.min(100, Math.round((placedHours / totalHours) * 100));
+
+    return {
+      totalHours,
+      placedHours,
+      remainingHours,
+      incompleteUnits,
+      percentage,
+    };
+  })();
+
   return (
 
     <DndContext
@@ -4301,6 +4341,15 @@ export default function App() {
                     <label>
                       <input
                         type="checkbox"
+                        checked={visiblePanels.progress}
+                        onChange={() => togglePanel("progress")}
+                      />
+                      מד התקדמות
+                    </label>
+
+                    <label>
+                      <input
+                        type="checkbox"
                         checked={visiblePanels.groups}
                         onChange={() => togglePanel("groups")}
                       />
@@ -4391,12 +4440,13 @@ export default function App() {
 
                     if (next) {
                       setVisiblePanels({
-                        groups: false,
+                        groups: true,
                         warnings: false,
                         highlights: false,
                         dailyBalance: false,
                         purpleHoleAlerts: true,
-                        groups: true,
+                        difficultyHints: false,
+                        progress: false,
                       });
                     }
 
@@ -4408,6 +4458,10 @@ export default function App() {
               </button>
 
             </div>
+
+            {visiblePanels.progress && (
+              <SchedulingProgressPanel progress={schedulingProgress} />
+            )}
 
             {visiblePanels.groups && (
               <ConstraintGroupsPanel
