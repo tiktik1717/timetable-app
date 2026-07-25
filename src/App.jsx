@@ -90,7 +90,7 @@ export default function App() {
   const [ctrlPressed, setCtrlPressed] = useState(false);
   const [shiftPressed, setShiftPressed] = useState(false);
   const [displayMode, setDisplayMode] = useState("names");
-  const [showFreeDayTeachers, setShowFreeDayTeachers] = useState(true);
+  const [showFreeDayTeachers, setShowFreeDayTeachers] = useState(false);
   const [hoveredCell, setHoveredCell] = useState(null);
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
@@ -119,13 +119,13 @@ export default function App() {
     return Number(localStorage.getItem("rowHeightOffset")) || 0;
   });
   const [visiblePanels, setVisiblePanels] = useState({
-    groups: true,
-    warnings: true,
+    groups: false,
+    warnings: false,
     highlights: true,
     dailyBalance: true,
     purpleHoleAlerts: true,
-    difficultyHints: false,
-    progress: true,
+    difficultyHints: true,
+    progress: false,
   });
   const [hasUnsavedCloudChanges, setHasUnsavedCloudChanges] = useState(false);
   const [lastCloudSavedAt, setLastCloudSavedAt] = useState(null);
@@ -4435,23 +4435,7 @@ export default function App() {
               <button
                 className="action-button focus-toggle-button"
                 onClick={() => {
-                  setIsFocusMode((prev) => {
-                    const next = !prev;
-
-                    if (next) {
-                      setVisiblePanels({
-                        groups: true,
-                        warnings: false,
-                        highlights: false,
-                        dailyBalance: false,
-                        purpleHoleAlerts: true,
-                        difficultyHints: false,
-                        progress: false,
-                      });
-                    }
-
-                    return next;
-                  });
+                  setIsFocusMode((prev) => !prev);
                 }}
               >
                 {isFocusMode ? "צא ממסך שיבוץ מלא" : "מסך שיבוץ מלא"}
