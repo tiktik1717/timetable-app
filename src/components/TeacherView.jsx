@@ -19,6 +19,8 @@ export default function TeacherView({
     removeTeacherFromSpecificTime,
     requestPurpleHoleCheck,
     teacherHasViewChanges,
+    teachingUnits,
+    countScheduledUnitHours,
 }) {
     const selectedTeacher = teachers.find(
         (teacher) => teacher.id === selectedTeacherForView
@@ -161,6 +163,44 @@ export default function TeacherView({
         setSelectedTeacherForView(visibleTeachersForView[nextIndex].id);
     }
 
+    const teacherProgress = (() => {
+        const teacherUnits = (teachingUnits || []).filter(
+            (unit) => unit.teacherId === selectedTeacherForView
+        );
+
+        function calculateForUnits(units) {
+            const totalHours = units.reduce(
+                (sum, unit) => sum + Math.max(0, Number(unit.hours) || 0),
+                0
+            );
+
+            const placedHours = units.reduce((sum, unit) => {
+                const requiredHours = Math.max(0, Number(unit.hours) || 0);
+                const scheduledHours = countScheduledUnitHours
+                    ? countScheduledUnitHours(unit.id)
+                    : 0;
+
+                return sum + Math.min(requiredHours, scheduledHours);
+            }, 0);
+
+            const percentage =
+                totalHours === 0
+                    ? 0
+                    : Math.min(100, Math.round((placedHours / totalHours) * 100));
+
+            return { totalHours, placedHours, percentage };
+        }
+
+        return {
+            classes: calculateForUnits(
+                teacherUnits.filter((unit) => unit.type !== "teamMeeting")
+            ),
+            meetings: calculateForUnits(
+                teacherUnits.filter((unit) => unit.type === "teamMeeting")
+            ),
+        };
+    })();
+
     return (
         <div className="teacher-view">
             <div className="teacher-view-header">
@@ -216,6 +256,52 @@ export default function TeacherView({
 
             <div className="teacher-view-note">
                 לחיצה על תא פנוי מסמנת/מבטלת שעה חסומה למורה. ימים חופשיים מנוהלים במסך ניהול מורים בלבד.
+            </div>
+
+            <div className="teacher-scheduling-progress" aria-live="polite">
+                <strong>{selectedTeacher?.name || ""}</strong>
+
+                <div className="teacher-progress-row">
+                    <span>שעות בכיתות</span>
+                    <span>
+                        {teacherProgress.classes.placedHours}/{teacherProgress.classes.totalHours}
+                    </span>
+                    <div
+                        className="view-scheduling-progress-track"
+                        role="progressbar"
+                        aria-label="התקדמות שיבוץ שעות בכיתות"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-valuenow={teacherProgress.classes.percentage}
+                        title={`${teacherProgress.classes.placedHours} מתוך ${teacherProgress.classes.totalHours} שעות בכיתות שובצו`}
+                    >
+                        <div
+                            className="view-scheduling-progress-fill"
+                            style={{ width: `${teacherProgress.classes.percentage}%` }}
+                        />
+                    </div>
+                </div>
+
+                <div className="teacher-progress-row">
+                    <span>ישיבות צוות</span>
+                    <span>
+                        {teacherProgress.meetings.placedHours}/{teacherProgress.meetings.totalHours}
+                    </span>
+                    <div
+                        className="view-scheduling-progress-track"
+                        role="progressbar"
+                        aria-label="התקדמות שיבוץ ישיבות צוות"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-valuenow={teacherProgress.meetings.percentage}
+                        title={`${teacherProgress.meetings.placedHours} מתוך ${teacherProgress.meetings.totalHours} שעות ישיבות צוות שובצו`}
+                    >
+                        <div
+                            className="view-scheduling-progress-fill"
+                            style={{ width: `${teacherProgress.meetings.percentage}%` }}
+                        />
+                    </div>
+                </div>
             </div>
 
             <table className="teacher-view-table">

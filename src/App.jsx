@@ -4697,6 +4697,8 @@ export default function App() {
             comparisonCheckpointId={comparisonCheckpointId}
             setComparisonCheckpointId={setComparisonCheckpointId}
             comparisonCheckpoint={getComparisonCheckpoint()}
+            teachingUnits={teachingUnits}
+            countScheduledUnitHours={countScheduledUnitHours}
           />
         )}
 
@@ -4722,6 +4724,8 @@ export default function App() {
             isTeacherBlockedHour={isTeacherBlockedHour}
             removeTeacherFromSpecificTime={removeTeacherFromSpecificTime}
             requestPurpleHoleCheck={requestPurpleHoleCheck}
+            teachingUnits={teachingUnits}
+            countScheduledUnitHours={countScheduledUnitHours}
           />
         )}
 

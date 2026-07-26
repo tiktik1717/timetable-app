@@ -1635,3 +1635,68 @@ body {
 .scheduling-progress-high {
   background: #2e7d32;
 }
+
+
+/* Progress summaries above class and teacher timetable views */
+.view-scheduling-progress,
+.teacher-scheduling-progress {
+  margin: 10px 0 12px;
+  padding: 10px 14px;
+  border: 1px solid #d8dee8;
+  border-radius: 10px;
+  background: #f8fafc;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.view-scheduling-progress-text {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+}
+
+.view-scheduling-progress-track {
+  height: 9px;
+  min-width: 110px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.view-scheduling-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #16a34a);
+  transition: width 180ms ease;
+}
+
+.teacher-scheduling-progress {
+  display: grid;
+  grid-template-columns: auto minmax(240px, 1fr) minmax(240px, 1fr);
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.teacher-progress-row {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 5px 10px;
+}
+
+.teacher-progress-row .view-scheduling-progress-track {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 850px) {
+  .teacher-scheduling-progress {
+    grid-template-columns: 1fr;
+  }
+
+  .view-scheduling-progress-text {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+}

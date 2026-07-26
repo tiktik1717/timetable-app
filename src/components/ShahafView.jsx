@@ -16,6 +16,8 @@ export default function ShahafView({
     setComparisonCheckpointId,
     comparisonCheckpoint,
     classHasShahafChanges,
+    teachingUnits,
+    countScheduledUnitHours,
 }) {
     const maxHoursForClass = Math.max(
         0,
@@ -69,6 +71,35 @@ export default function ShahafView({
         setSelectedClassForShahaf(visibleClassesForShahaf[nextIndex]);
     }
 
+    const classProgress = (() => {
+        const classUnits = (teachingUnits || []).filter(
+            (unit) =>
+                unit.className === selectedClassForShahaf &&
+                unit.type !== "teamMeeting"
+        );
+
+        const totalHours = classUnits.reduce(
+            (sum, unit) => sum + Math.max(0, Number(unit.hours) || 0),
+            0
+        );
+
+        const placedHours = classUnits.reduce((sum, unit) => {
+            const requiredHours = Math.max(0, Number(unit.hours) || 0);
+            const scheduledHours = countScheduledUnitHours
+                ? countScheduledUnitHours(unit.id)
+                : 0;
+
+            return sum + Math.min(requiredHours, scheduledHours);
+        }, 0);
+
+        const percentage =
+            totalHours === 0
+                ? 0
+                : Math.min(100, Math.round((placedHours / totalHours) * 100));
+
+        return { totalHours, placedHours, percentage };
+    })();
+
     return (
         <div className="shahaf-view">
             <div className="shahaf-header">
@@ -120,6 +151,28 @@ export default function ShahafView({
                     />
                     הצג כיתות ששונו בלבד
                 </label>
+            </div>
+
+            <div className="view-scheduling-progress" aria-live="polite">
+                <div className="view-scheduling-progress-text">
+                    <strong>{selectedClassForShahaf}</strong>
+                    <span>
+                        שובצו {classProgress.placedHours}/{classProgress.totalHours} שעות
+                    </span>
+                </div>
+                <div
+                    className="view-scheduling-progress-track"
+                    role="progressbar"
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-valuenow={classProgress.percentage}
+                    title={`${classProgress.placedHours} מתוך ${classProgress.totalHours} שעות שובצו`}
+                >
+                    <div
+                        className="view-scheduling-progress-fill"
+                        style={{ width: `${classProgress.percentage}%` }}
+                    />
+                </div>
             </div>
 
             <table className="shahaf-table">
