@@ -1971,67 +1971,135 @@ export default function App() {
     sheetRows,
     existingUnits = []
   ) {
-    const mergedMap = new Map();
-
-    // היחידות הקיימות לפי צירוף יציב של כיתה ומורה
-    const existingUnitsByKey = new Map(
-      existingUnits
-        .filter((unit) => unit.type !== "teamMeeting")
-        .map((unit) => [
-          `${unit.className}|${unit.teacherId}`,
-          unit,
-        ])
-    );
+    const desiredHoursByKey = new Map();
 
     for (const row of sheetRows) {
       const hours = Number(row.hours) || 0;
 
-      if (
-        !row.teacherId ||
-        !row.className ||
-        hours <= 0
-      ) {
+      if (!row.teacherId || !row.className || hours <= 0) {
         continue;
       }
 
       const key = `${row.className}|${row.teacherId}`;
-
-      if (!mergedMap.has(key)) {
-        mergedMap.set(key, {
-          className: row.className,
-          teacherId: row.teacherId,
-          subject: "רגיל",
-          hours: 0,
-        });
-      }
-
-      mergedMap.get(key).hours += hours;
+      desiredHoursByKey.set(
+        key,
+        (desiredHoursByKey.get(key) || 0) + hours
+      );
     }
 
-    return [...mergedMap.entries()].map(([key, rebuiltUnit]) => {
-      const existingUnit = existingUnitsByKey.get(key);
+    const existingUnitsByKey = new Map();
+    const usedIds = new Set(existingUnits.map((unit) => unit.id));
 
-      return {
-        // שומר את כל המידע הקיים:
-        // קבוצת שיבוץ, מאפיינים מיוחדים ומטא-דאטה
-        ...(existingUnit || {}),
+    for (const unit of existingUnits) {
+      if (unit.type === "teamMeeting") continue;
 
-        // שומר את המזהה הישן, כדי ששיבוצים קיימים לא יתנתקו
-        id:
-          existingUnit?.id ||
-          `base-${rebuiltUnit.className}-${rebuiltUnit.teacherId}`,
+      const key = `${unit.className}|${unit.teacherId}`;
 
-        // הנתונים האלה מתעדכנים לפי הסדין
-        className: rebuiltUnit.className,
-        teacherId: rebuiltUnit.teacherId,
-        subject: rebuiltUnit.subject,
-        hours: rebuiltUnit.hours,
+      if (!existingUnitsByKey.has(key)) {
+        existingUnitsByKey.set(key, []);
+      }
 
-        // ליחידה חדשה בלבד אין עדיין קבוצת שיבוץ
-        constraintGroupId:
-          existingUnit?.constraintGroupId ?? null,
-      };
-    });
+      existingUnitsByKey.get(key).push(unit);
+    }
+
+    const createUniqueBaseId = (className, teacherId) => {
+      const baseId = `base-${className}-${teacherId}`;
+
+      if (!usedIds.has(baseId)) {
+        usedIds.add(baseId);
+        return baseId;
+      }
+
+      let index = 2;
+      let candidate = `${baseId}-${index}`;
+
+      while (usedIds.has(candidate)) {
+        index += 1;
+        candidate = `${baseId}-${index}`;
+      }
+
+      usedIds.add(candidate);
+      return candidate;
+    };
+
+    const rebuiltUnits = [];
+
+    for (const [key, desiredHours] of desiredHoursByKey.entries()) {
+      const [className, teacherId] = key.split("|");
+      const currentUnits = (existingUnitsByKey.get(key) || []).map((unit) => ({
+        ...unit,
+      }));
+
+      if (currentUnits.length === 0) {
+        rebuiltUnits.push({
+          id: createUniqueBaseId(className, teacherId),
+          className,
+          teacherId,
+          subject: "רגיל",
+          hours: desiredHours,
+          constraintGroupId: null,
+        });
+        continue;
+      }
+
+      const currentTotal = currentUnits.reduce(
+        (sum, unit) => sum + (Number(unit.hours) || 0),
+        0
+      );
+
+      if (desiredHours > currentTotal) {
+        const extraHours = desiredHours - currentTotal;
+        const freeUnit = currentUnits.find(
+          (unit) => !unit.constraintGroupId
+        );
+
+        if (freeUnit) {
+          freeUnit.hours = (Number(freeUnit.hours) || 0) + extraHours;
+        } else {
+          currentUnits.push({
+            id: createUniqueBaseId(className, teacherId),
+            className,
+            teacherId,
+            subject: "רגיל",
+            hours: extraHours,
+            constraintGroupId: null,
+          });
+        }
+      } else if (desiredHours < currentTotal) {
+        let hoursToRemove = currentTotal - desiredHours;
+
+        // מפחיתים קודם מהיחידה החופשית ורק אחר כך מיחידות משויכות.
+        // כך שינוי רגיל בסדין אינו מאחד או מעביר שעות בין קבוצות שיבוץ.
+        const reductionOrder = [
+          ...currentUnits.filter((unit) => !unit.constraintGroupId),
+          ...currentUnits.filter((unit) => unit.constraintGroupId),
+        ];
+
+        for (const unit of reductionOrder) {
+          if (hoursToRemove <= 0) break;
+
+          const removable = Math.min(
+            Number(unit.hours) || 0,
+            hoursToRemove
+          );
+
+          unit.hours = (Number(unit.hours) || 0) - removable;
+          hoursToRemove -= removable;
+        }
+      }
+
+      rebuiltUnits.push(
+        ...currentUnits
+          .filter((unit) => (Number(unit.hours) || 0) > 0)
+          .map((unit) => ({
+            ...unit,
+            className,
+            teacherId,
+          }))
+      );
+    }
+
+    return mergeSimilarUnitsInList(rebuiltUnits);
   }
 
   function buildTeachingLoadsFromUnits(units, classes) {
@@ -2073,52 +2141,56 @@ export default function App() {
   }
 
   function trimScheduleToUnitHours(nextUnits) {
+    const validUnitIds = new Set(nextUnits.map((unit) => unit.id));
+    const hoursByUnitId = new Map(
+      nextUnits.map((unit) => [unit.id, Number(unit.hours) || 0])
+    );
+
     let removedCount = 0;
 
     setSchedule((prevSchedule) => {
       const nextSchedule = structuredClone(prevSchedule);
+      const keptCounts = new Map();
 
-      for (const unit of nextUnits) {
-        let scheduledCount = countUnitScheduled(unit.id, nextSchedule);
+      for (const day of days) {
+        for (const className of classes) {
+          for (const hour of hours) {
+            const currentUnitIds = getCellUnitIdsFromSchedule(
+              nextSchedule,
+              day,
+              className,
+              hour
+            );
 
-        while (scheduledCount > unit.hours) {
-          let removed = false;
+            const nextUnitIds = [];
 
-          for (const day of days) {
-            for (const className of classes) {
-              for (const hour of hours) {
-                const currentUnitIds = getCellUnitIdsFromSchedule(
-                  nextSchedule,
-                  day,
-                  className,
-                  hour
-                );
-
-                if (currentUnitIds.includes(unit.id)) {
-                  const nextUnitIds = currentUnitIds.filter(
-                    (id, index) =>
-                      id !== unit.id || index !== currentUnitIds.indexOf(unit.id)
-                  );
-
-                  setCellUnitIds(
-                    nextSchedule,
-                    day,
-                    className,
-                    hour,
-                    nextUnitIds
-                  );
-
-                  scheduledCount--;
-                  removedCount++;
-                  removed = true;
-                  break;
-                }
+            for (const unitId of currentUnitIds) {
+              if (!validUnitIds.has(unitId)) {
+                removedCount++;
+                continue;
               }
 
-              if (removed) break;
+              const alreadyKept = keptCounts.get(unitId) || 0;
+              const allowedHours = hoursByUnitId.get(unitId) || 0;
+
+              if (alreadyKept >= allowedHours) {
+                removedCount++;
+                continue;
+              }
+
+              nextUnitIds.push(unitId);
+              keptCounts.set(unitId, alreadyKept + 1);
             }
 
-            if (removed) break;
+            if (nextUnitIds.length !== currentUnitIds.length) {
+              setCellUnitIds(
+                nextSchedule,
+                day,
+                className,
+                hour,
+                nextUnitIds
+              );
+            }
           }
         }
       }
@@ -2127,7 +2199,7 @@ export default function App() {
     });
 
     if (removedCount > 0) {
-      alert(`בעקבות הפחתת שעות הוסרו ${removedCount} שיבוצים קיימים.`);
+      alert(`בעקבות שינוי השעות הוסרו ${removedCount} שיבוצים שאינם תקפים עוד.`);
     }
   }
 
