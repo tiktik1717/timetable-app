@@ -2342,7 +2342,7 @@ export default function App() {
         nextRows,
         teachingUnits
       );
-      
+
     const meetingUnits = teachingUnits.filter(
       (unit) => unit.type === "teamMeeting"
     );
@@ -2681,8 +2681,8 @@ export default function App() {
 
     const blockedSlots = shouldBlock
       ? Object.fromEntries(
-          days.map((day) => [normalizeDay(day), hours.map(Number)])
-        )
+        days.map((day) => [normalizeDay(day), hours.map(Number)])
+      )
       : {};
 
     setSchoolData((prev) => ({
@@ -3086,15 +3086,14 @@ export default function App() {
   function countScheduledUnitHours(unitId, scheduleObject = schedule) {
     let count = 0;
 
-    for (const day of days) {
-      for (const className of classes) {
-        for (const hour of hours) {
-          const unitIds = getCellUnitIdsFromSchedule(
-            scheduleObject,
-            day,
-            className,
-            hour
-          );
+    for (const daySchedule of Object.values(scheduleObject || {})) {
+      for (const classSchedule of Object.values(daySchedule || {})) {
+        for (const cellValue of Object.values(classSchedule || {})) {
+          const unitIds = Array.isArray(cellValue)
+            ? cellValue
+            : cellValue
+              ? [cellValue]
+              : [];
 
           if (unitIds.includes(unitId)) {
             count++;
