@@ -98,6 +98,7 @@ export default function App() {
   const [groupDialogUnit, setGroupDialogUnit] = useState(null);
   const [groupDialogHours, setGroupDialogHours] = useState("");
   const [groupDialogSubject, setGroupDialogSubject] = useState("");
+  const [groupSearchText, setGroupSearchText] = useState("");
   const [singleDragUnitId, setSingleDragUnitId] = useState(null);
   const [highlightedGroupId, setHighlightedGroupId] = useState(null);
   const [showConstraintGroupDialog, setShowConstraintGroupDialog] = useState(false);
@@ -4607,6 +4608,7 @@ export default function App() {
                                   }}
                                   onAssignGroup={(unit) => {
                                     setGroupDialogUnit(unit);
+                                    setGroupSearchText("");
                                     setGroupDialogHours(String(unit.hours));
                                     setGroupDialogSubject(
                                       unit.subject && unit.subject !== "רגיל" ? unit.subject : ""
@@ -4944,91 +4946,134 @@ export default function App() {
           </div>
         )}
         {groupDialogUnit && (
-          <div className="modal-backdrop" onClick={() => setGroupDialogUnit(null)}>
-            <div className="group-dialog" onClick={(e) => e.stopPropagation()}>
-              <h3>פיצול ושיוך לקבוצת שיבוץ</h3>
+          <div
+            className="modal-backdrop"
+            onClick={() => {
+              setGroupDialogUnit(null);
+              setGroupSearchText("");
+            }}
+          >
+            <div
+              className="group-dialog assignment-group-dialog"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="assignment-group-dialog-header">
+                <h3>פיצול ושיוך לקבוצת שיבוץ</h3>
 
-              <p>
-                יחידה:{" "}
-                <strong>
-                  {getTeacherById(groupDialogUnit.teacherId)?.name}
-                  {groupDialogUnit.subject && groupDialogUnit.subject !== "רגיל"
-                    ? ` / ${groupDialogUnit.subject}`
-                    : ""}
-                </strong>
-              </p>
+                <p>
+                  יחידה:{" "}
+                  <strong>
+                    {getTeacherById(groupDialogUnit.teacherId)?.name}
+                    {groupDialogUnit.subject && groupDialogUnit.subject !== "רגיל"
+                      ? ` / ${groupDialogUnit.subject}`
+                      : ""}
+                  </strong>
+                </p>
 
-              <p>סה״כ שעות ביחידה: {groupDialogUnit.hours}</p>
+                <p>סה״כ שעות ביחידה: {groupDialogUnit.hours}</p>
 
-              <label className="dialog-field">
-                מספר שעות לשיוך:
+                <label className="dialog-field">
+                  מספר שעות לשיוך:
+                  <input
+                    type="number"
+                    min="1"
+                    max={groupDialogUnit.hours}
+                    value={groupDialogHours}
+                    onChange={(e) => setGroupDialogHours(e.target.value)}
+                  />
+                </label>
+
+                <label className="dialog-field">
+                  מקצוע / תיאור:
+                  <input
+                    type="text"
+                    placeholder="לדוגמה: אנגלית"
+                    value={groupDialogSubject}
+                    onChange={(e) => setGroupDialogSubject(e.target.value)}
+                  />
+                </label>
+
                 <input
-                  type="number"
-                  min="1"
-                  max={groupDialogUnit.hours}
-                  value={groupDialogHours}
-                  onChange={(e) => setGroupDialogHours(e.target.value)}
+                  type="search"
+                  className="constraint-group-search"
+                  value={groupSearchText}
+                  onChange={(e) => setGroupSearchText(e.target.value)}
+                  placeholder="חיפוש קבוצה לפי שם..."
+                  autoFocus
                 />
-              </label>
+              </div>
 
-              <label className="dialog-field">
-                מקצוע / תיאור:
-                <input
-                  type="text"
-                  placeholder="לדוגמה: אנגלית"
-                  value={groupDialogSubject}
-                  onChange={(e) => setGroupDialogSubject(e.target.value)}
-                />
-              </label>
-
-              <button
-                className="group-option no-group"
-                onClick={() =>
-                  splitUnitAndAssignGroup(
-                    groupDialogUnit.id,
-                    null,
-                    groupDialogHours,
-                    groupDialogSubject
-                  )
-                }
-              >
-                ללא קבוצה
-              </button>
-
-              {constraintGroups.map((group) => (
+              <div className="constraint-group-list">
                 <button
-                  key={group.id}
-                  className="group-option"
+                  className="group-option no-group"
                   onClick={() =>
                     splitUnitAndAssignGroup(
                       groupDialogUnit.id,
-                      group.id,
+                      null,
                       groupDialogHours,
                       groupDialogSubject
                     )
                   }
                 >
-                  <span
-                    className="constraint-color"
-                    style={{ backgroundColor: group.color }}
-                  />
-                  {group.name} —{" "}
-                  {(group.rules || [group.type])
-                    .map((rule) => {
-                      if (rule === "sameTime") return "חייב באותו טור";
-                      if (rule === "notSameTime") return "אסור באותו טור";
-                      if (rule === "notSameDaySameClass") return "אסור באותה שורה";
-                      return rule;
-                    })
-                    .join(" + ")}
+                  ללא קבוצה
                 </button>
-              ))}
 
-              <button className="dialog-cancel" onClick={() => setGroupDialogUnit(null)}>
-                ביטול
-              </button>
+                {constraintGroups
+                  .filter((group) =>
+                    (group.name || "")
+                      .toLocaleLowerCase("he")
+                      .includes(groupSearchText.trim().toLocaleLowerCase("he"))
+                  )
+                  .map((group) => (
+                    <button
+                      key={group.id}
+                      className="group-option"
+                      onClick={() =>
+                        splitUnitAndAssignGroup(
+                          groupDialogUnit.id,
+                          group.id,
+                          groupDialogHours,
+                          groupDialogSubject
+                        )
+                      }
+                    >
+                      <span
+                        className="constraint-color"
+                        style={{ backgroundColor: group.color }}
+                      />
+                      {group.name} —{" "}
+                      {(group.rules || [group.type])
+                        .map((rule) => {
+                          if (rule === "sameTime") return "חייב באותו טור";
+                          if (rule === "notSameTime") return "אסור באותו טור";
+                          if (rule === "notSameDaySameClass") return "אסור באותה שורה";
+                          return rule;
+                        })
+                        .join(" + ")}
+                    </button>
+                  ))}
 
+                {constraintGroups.length > 0 &&
+                  constraintGroups.filter((group) =>
+                    (group.name || "")
+                      .toLocaleLowerCase("he")
+                      .includes(groupSearchText.trim().toLocaleLowerCase("he"))
+                  ).length === 0 && (
+                    <p className="empty-group-search">לא נמצאו קבוצות מתאימות</p>
+                  )}
+              </div>
 
+              <div className="assignment-group-dialog-footer">
+                <button
+                  className="dialog-cancel"
+                  onClick={() => {
+                    setGroupDialogUnit(null);
+                    setGroupSearchText("");
+                  }}
+                >
+                  ביטול
+                </button>
+              </div>
             </div>
           </div>
         )}
