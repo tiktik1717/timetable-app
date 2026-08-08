@@ -97,7 +97,6 @@ export default function App() {
   const [importedExcel, setImportedExcel] = useState(null);
   const [groupDialogUnit, setGroupDialogUnit] = useState(null);
   const [groupDialogHours, setGroupDialogHours] = useState("");
-  const [groupDialogSubject, setGroupDialogSubject] = useState("");
   const [groupSearchText, setGroupSearchText] = useState("");
   const [singleDragUnitId, setSingleDragUnitId] = useState(null);
   const [highlightedGroupId, setHighlightedGroupId] = useState(null);
@@ -1186,66 +1185,6 @@ export default function App() {
     };
   }
 
-  function buildEmptyScheduleTemplate() {
-    const emptySchedule = {};
-
-    for (const day of days) {
-      emptySchedule[day] = {};
-
-      for (const className of classes) {
-        const maxHour = isTeamMeetingRow(className)
-          ? getMaxHoursForDay(day)
-          : getClassHoursForDay(className, day);
-
-        emptySchedule[day][className] = {};
-
-        for (let hour = 1; hour <= maxHour; hour++) {
-          emptySchedule[day][className][hour] = [];
-        }
-      }
-    }
-
-    return emptySchedule;
-  }
-
-  function exportSchedulingMetadataToFile() {
-    const projectData = {
-      version: 1,
-      savedAt: new Date().toISOString(),
-      exportType: "scheduling-metadata-only",
-      exportNotes: {
-        containsExistingSchedule: false,
-        scheduleCellFormat: "Each schedule cell is an array of teachingUnit ids.",
-        purpose:
-          "Metadata-only export for creating a new timetable without exposing the existing solution.",
-      },
-      schoolData: structuredClone(schoolData),
-      schedule: buildEmptyScheduleTemplate(),
-      teacherHighlights: structuredClone(teacherHighlights),
-
-      // Checkpoints contain historical schedules, so they are intentionally omitted
-      // from the experiment export to avoid revealing the existing solution.
-      checkpoints: [],
-      currentCheckpointId: "",
-      comparisonCheckpointId: "",
-    };
-
-    const json = JSON.stringify(projectData, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `school-timetable-metadata-${new Date()
-      .toISOString()
-      .slice(0, 10)}.json`;
-
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }
-
   function saveProjectToFile() {
     const projectData = {
       version: 1,
@@ -1323,16 +1262,36 @@ export default function App() {
     return unit?.className || null;
   }
 
-  function cellHasActiveTeacher(className, day, hour) {
-    const teacherId = getActivePlacementTeacherId();
+  function getSelectedCellTeacherIds() {
+    if (!selectedCell) return new Set();
 
-    if (!teacherId) return false;
+    const unitIds = getCellUnitIds(
+      selectedDay,
+      selectedCell.className,
+      selectedCell.hour
+    );
+
+    return new Set(
+      unitIds
+        .map(getUnitById)
+        .filter(Boolean)
+        .map((unit) => unit.teacherId)
+    );
+  }
+
+  function cellHasActiveTeacher(className, day, hour) {
+    const activeTeacherId = getActivePlacementTeacherId();
+    const teacherIdsToHighlight = activeTeacherId
+      ? new Set([activeTeacherId])
+      : getSelectedCellTeacherIds();
+
+    if (teacherIdsToHighlight.size === 0) return false;
 
     const unitIds = getCellUnitIds(day, className, hour);
 
     return unitIds.some((unitId) => {
       const unit = getUnitById(unitId);
-      return unit?.teacherId === teacherId;
+      return unit && teacherIdsToHighlight.has(unit.teacherId);
     });
   }
 
@@ -1764,6 +1723,78 @@ export default function App() {
       return;
     }
 
+    requestPurpleHoleCheck();
+    placeUnitsByClassAtHour(unitsToPlace, String(hour), false);
+  }
+
+  function autoPlaceUniqueCandidateInSelectedCell() {
+    if (!selectedCell) {
+      alert("יש לבחור תחילה משבצת בטבלת השיבוץ");
+      return;
+    }
+
+    const { className, hour } = selectedCell;
+
+    if (isBlockedCell(className, selectedDay, hour)) {
+      alert("לא ניתן לשבץ בשעה שאינה קיימת בכיתה זו ביום זה");
+      return;
+    }
+
+    if (isCellLocked(selectedDay, className, hour)) {
+      alert("לא ניתן לשבץ בתא נעול");
+      return;
+    }
+
+    if (getCellUnitIds(selectedDay, className, hour).length > 0) {
+      alert("שיבוץ אוטומטי באמצעות Alt+A מיועד למשבצת ריקה");
+      return;
+    }
+
+    const candidates = teachingUnits.filter((unit) => {
+      if (!canUnitFillCell(unit, selectedDay, className, hour)) {
+        return false;
+      }
+
+      const unitsToPlace = getSameTimeGroupUnits(unit);
+
+      return unitsToPlace.every((candidate) =>
+        canUnitFillCell(
+          candidate,
+          selectedDay,
+          candidate.className,
+          hour
+        )
+      );
+    });
+
+    if (candidates.length === 0) {
+      alert("לא נמצא מורה שניתן לשבץ במשבצת שנבחרה");
+      return;
+    }
+
+    if (candidates.length > 1) {
+      alert(`נמצאו ${candidates.length} אפשרויות שיבוץ. השיבוץ האוטומטי פועל רק כאשר יש אפשרות יחידה.`);
+      return;
+    }
+
+    const unit = candidates[0];
+    const unitsToPlace = getSameTimeGroupUnits(unit);
+
+    const invalidUnits = unitsToPlace.filter((candidate) => {
+      if (isBlockedCell(candidate.className, selectedDay, hour)) return true;
+      if (isCellLocked(selectedDay, candidate.className, hour)) return true;
+      if (isUnitConstraintGroupBlockedAt(candidate, selectedDay, hour)) return true;
+      if (!canTeacherWorkAt(candidate.teacherId, selectedDay, hour)) return true;
+
+      return false;
+    });
+
+    if (invalidUnits.length > 0) {
+      alert("לא ניתן לשבץ את כל יחידות הקבוצה בשעה שנבחרה");
+      return;
+    }
+
+    requestPurpleHoleCheck();
     placeUnitsByClassAtHour(unitsToPlace, String(hour), false);
   }
 
@@ -1886,15 +1917,82 @@ export default function App() {
     return "#1b5e20";
   }
 
-  function isUnitAvailableForSelectedCell(unit) {
-    if (!selectedCell) return false;
+  function getSelectedCellUnitHint(
+    unit,
+    { allowAlreadyScheduledUnit = false, sourceClassName = null, sourceHour = null } = {}
+  ) {
+    if (!selectedCell || !unit) return null;
 
-    return canUnitFillCell(
-      unit,
-      selectedDay,
-      selectedCell.className,
-      selectedCell.hour
-    );
+    if (unit.className !== selectedCell.className) return null;
+
+    if (
+      sourceClassName &&
+      String(sourceHour) === String(selectedCell.hour) &&
+      sourceClassName === selectedCell.className
+    ) {
+      return null;
+    }
+
+    if (
+      sourceClassName &&
+      isCellLocked(selectedDay, sourceClassName, sourceHour)
+    ) {
+      return null;
+    }
+
+    if (
+      getRemainingUnitHours(unit.id) <= 0 &&
+      !allowAlreadyScheduledUnit
+    ) {
+      return null;
+    }
+
+    if (
+      isBlockedCell(selectedCell.className, selectedDay, selectedCell.hour) ||
+      isCellLocked(selectedDay, selectedCell.className, selectedCell.hour) ||
+      !canTeacherWorkAt(unit.teacherId, selectedDay, selectedCell.hour) ||
+      isUnitConstraintGroupBlockedAt(unit, selectedDay, selectedCell.hour)
+    ) {
+      return null;
+    }
+
+    if (
+      isTeacherBusyAt(
+        unit.teacherId,
+        selectedDay,
+        selectedCell.hour
+      )
+    ) {
+      return null;
+    }
+
+    if (
+      hasNotSameDaySameClassConflict(
+        selectedCell.className,
+        selectedCell.hour,
+        unit,
+        selectedDay
+      )
+    ) {
+      return null;
+    }
+
+    if (
+      hasNotSameTimeConflict(
+        selectedCell.className,
+        selectedCell.hour,
+        unit,
+        selectedDay
+      )
+    ) {
+      return "notSameTimeConflict";
+    }
+
+    return "available";
+  }
+
+  function isUnitAvailableForSelectedCell(unit) {
+    return getSelectedCellUnitHint(unit) === "available";
   }
 
   async function loadProjectFromFile(event) {
@@ -2448,7 +2546,7 @@ export default function App() {
     return hour > getClassHoursForDay(className, day);
   }
 
-  function splitUnitAndAssignGroup(unitId, groupId, hoursToAssign, subject) {
+  function splitUnitAndAssignGroup(unitId, groupId, hoursToAssign) {
     setSchoolData((prev) => {
       const originalUnit = prev.teachingUnits.find((unit) => unit.id === unitId);
 
@@ -2467,9 +2565,12 @@ export default function App() {
       }
 
       const isRemovingGroup = !groupId;
+      const selectedGroup = groupId
+        ? (prev.constraintGroups || []).find((group) => group.id === groupId)
+        : null;
       const cleanSubject = isRemovingGroup
         ? "רגיל"
-        : subject.trim() || originalUnit.subject || "רגיל";
+        : selectedGroup?.name || originalUnit.subject || "רגיל";
 
       const updatedUnits = prev.teachingUnits.flatMap((unit) => {
         if (unit.id !== unitId) return [unit];
@@ -2510,7 +2611,6 @@ export default function App() {
 
     setGroupDialogUnit(null);
     setGroupDialogHours("");
-    setGroupDialogSubject("");
   }
 
   function getWarnings() {
@@ -2970,6 +3070,12 @@ export default function App() {
 
       if (event.altKey) {
         const key = event.key.toLowerCase();
+
+        if (key === "a" || key === "ש") {
+          event.preventDefault();
+          autoPlaceUniqueCandidateInSelectedCell();
+          return;
+        }
 
         if (["1", "2", "3", "4", "5", "6"].includes(key)) {
           event.preventDefault();
@@ -4647,7 +4753,7 @@ export default function App() {
                               //const group = getConstraintGroupById(unit.constraintGroupId);
                               const group = getUnitDisplayGroup(unit);
                               const teacherHighlight = getTeacherHighlight(teacher);
-                              const availableForSelectedCell = isUnitAvailableForSelectedCell(unit);
+                              const selectedCellHint = getSelectedCellUnitHint(unit);
 
                               return (
                                 <LoadItem
@@ -4661,7 +4767,7 @@ export default function App() {
                                   group={group}
                                   teacherHighlight={teacherHighlight}
                                   selectedLoadUnitId={selectedLoadUnitId}
-                                  availableForSelectedCell={availableForSelectedCell}
+                                  selectedCellHint={selectedCellHint}
                                   onSelectLoadUnit={(unitId) => {
                                     setSelectedLoadUnitId(unitId);
                                     setActivePlacementUnitId(unitId);
@@ -4670,9 +4776,6 @@ export default function App() {
                                     setGroupDialogUnit(unit);
                                     setGroupSearchText("");
                                     setGroupDialogHours(String(unit.hours));
-                                    setGroupDialogSubject(
-                                      unit.subject && unit.subject !== "רגיל" ? unit.subject : ""
-                                    );
                                   }}
                                   onHighlightGroup={setHighlightedGroupId}
                                   highlightedGroup={isHighlightedGroup(unit)}
@@ -4711,7 +4814,7 @@ export default function App() {
                         {visibleHours.map((hour) => {
                           const unitIds = getCellUnitIds(selectedDay, className, hour);
                           const units = unitIds.map(getUnitById).filter(Boolean);
-                          const availableScheduledUnitsForSelectedCell = new Set();
+                          const selectedCellHintsByUnit = {};
 
                           const teachersByUnit = {};
                           const groupsByUnit = {};
@@ -4719,8 +4822,14 @@ export default function App() {
 
                           for (const unit of units) {
                             const teacher = getTeacherById(unit.teacherId);
-                            if (isScheduledUnitMovableToSelectedCell(unit, className, hour)) {
-                              availableScheduledUnitsForSelectedCell.add(unit.id);
+                            const selectedCellHint = getSelectedCellUnitHint(unit, {
+                              allowAlreadyScheduledUnit: true,
+                              sourceClassName: className,
+                              sourceHour: hour,
+                            });
+
+                            if (selectedCellHint) {
+                              selectedCellHintsByUnit[unit.id] = selectedCellHint;
                             }
                             teachersByUnit[unit.id] = teacher;
                             groupsByUnit[unit.id] = getUnitDisplayGroup(unit);
@@ -4771,7 +4880,7 @@ export default function App() {
                             <DroppableCell
                               purpleHole={purpleHole}
                               locked={locked}
-                              availableScheduledUnitsForSelectedCell={availableScheduledUnitsForSelectedCell}
+                              selectedCellHintsByUnit={selectedCellHintsByUnit}
                               onToggleLock={() => toggleCellLock(selectedDay, className, hour)}
                               key={hour}
                               className={className}
@@ -4795,6 +4904,9 @@ export default function App() {
                                   className,
                                   hour: String(hour),
                                 });
+                                setSelectedLoadUnitId(null);
+                                setActivePlacementUnitId(null);
+                                setDraggedTeacherId(null);
 
                                 const firstUnit = units[0];
 
@@ -4928,7 +5040,6 @@ export default function App() {
         {activeView === "file" && (
           <FileManager
             saveProjectToFile={saveProjectToFile}
-            exportSchedulingMetadataToFile={exportSchedulingMetadataToFile}
             loadProjectFromFile={loadProjectFromFile}
             handleExcelUpload={handleExcelUpload}
             clearProject={clearProject}
@@ -5044,15 +5155,14 @@ export default function App() {
                   />
                 </label>
 
-                <label className="dialog-field">
-                  מקצוע / תיאור:
-                  <input
-                    type="text"
-                    placeholder="לדוגמה: אנגלית"
-                    value={groupDialogSubject}
-                    onChange={(e) => setGroupDialogSubject(e.target.value)}
-                  />
-                </label>
+                {groupDialogUnit.constraintGroupId && (
+                  <p className="current-assignment-group">
+                    קבוצה נוכחית:{" "}
+                    <strong>
+                      {getConstraintGroupById(groupDialogUnit.constraintGroupId)?.name}
+                    </strong>
+                  </p>
+                )}
 
                 <input
                   type="search"
@@ -5071,8 +5181,7 @@ export default function App() {
                     splitUnitAndAssignGroup(
                       groupDialogUnit.id,
                       null,
-                      groupDialogHours,
-                      groupDialogSubject
+                      groupDialogHours
                     )
                   }
                 >
@@ -5093,8 +5202,7 @@ export default function App() {
                         splitUnitAndAssignGroup(
                           groupDialogUnit.id,
                           group.id,
-                          groupDialogHours,
-                          groupDialogSubject
+                          groupDialogHours
                         )
                       }
                     >
