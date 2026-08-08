@@ -115,21 +115,10 @@ export default function TeacherView({
 
     const [showChangedTeachersOnly, setShowChangedTeachersOnly] = useState(false);
 
-    const baseVisibleTeachers =
+    const visibleTeachersForView =
         showChangedTeachersOnly && comparisonCheckpointId
             ? teachers.filter((teacher) => teacherHasViewChanges(teacher.id))
             : teachers;
-
-    const visibleTeachersForView = [...baseVisibleTeachers].sort((a, b) =>
-        (a.name || "").localeCompare(b.name || "", "he")
-    );
-
-    const visibleTeachersByCode = [...baseVisibleTeachers].sort((a, b) =>
-        String(a.id).localeCompare(String(b.id), "he", {
-            numeric: true,
-            sensitivity: "base",
-        })
-    );
 
     const currentTeacherIndex = visibleTeachersForView.findIndex(
         (teacher) => teacher.id === selectedTeacherForView
@@ -226,20 +215,6 @@ export default function TeacherView({
                         {visibleTeachersForView.map((teacher) => (
                             <option key={teacher.id} value={teacher.id}>
                                 {teacher.name}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-
-                <label>
-                    קוד מורה:
-                    <select
-                        value={selectedTeacherForView}
-                        onChange={(e) => setSelectedTeacherForView(e.target.value)}
-                    >
-                        {visibleTeachersByCode.map((teacher) => (
-                            <option key={teacher.id} value={teacher.id}>
-                                {teacher.id}
                             </option>
                         ))}
                     </select>

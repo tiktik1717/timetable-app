@@ -19,7 +19,7 @@ export default function DroppableCell({
   activeTeacherHere,
   locked,
   onToggleLock,
-  selectedCellHintsByUnit,
+  availableScheduledUnitsForSelectedCell,
   purpleHole,
   difficultyCount,
   difficultyLevel,
@@ -105,7 +105,7 @@ export default function DroppableCell({
           className="cell-stack"
         >
           {units.map((unit) => {
-            const selectedCellHint = selectedCellHintsByUnit?.[unit.id] || null;
+            const isAvailableForSelectedCell = availableScheduledUnitsForSelectedCell?.has(unit.id);
             const teacherHighlight = teacherHighlightsByUnit?.[unit.id];
             const teacher = teachersByUnit[unit.id];
             const group = groupsByUnit[unit.id];
@@ -123,12 +123,7 @@ export default function DroppableCell({
                   isConflicting ? "cell-teacher-conflict" : "",
                   isHighlighted ? "group-highlight" : "",
                   teacherHighlight ? "teacher-search-highlight" : "",
-                  selectedCellHint === "available"
-                    ? "available-for-selected-cell"
-                    : "",
-                  selectedCellHint === "notSameTimeConflict"
-                    ? "not-same-time-candidate"
-                    : "",
+                  isAvailableForSelectedCell ? "available-for-selected-cell" : "",
                 ].join(" ")}
                 style={{
                   backgroundColor,
