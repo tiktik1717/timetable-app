@@ -2,6 +2,7 @@ import AuthPanel from "./AuthPanel";
 
 export default function FileManager({
     saveProjectToFile,
+    exportSchedulingMetadataToFile,
     loadProjectFromFile,
     handleExcelUpload,
     clearProject,
@@ -92,6 +93,14 @@ export default function FileManager({
             <div className="file-actions">
                 <button className="file-action-button" onClick={saveProjectToFile}>
                     שמור פרוייקט לקובץ
+                </button>
+
+                <button
+                    className="file-action-button"
+                    onClick={exportSchedulingMetadataToFile}
+                    title="מייצא את כל נתוני המערכת והאילוצים, ללא השיבוץ הקיים וללא נקודות שמירה"
+                >
+                    ייצא נתונים לניסוי שיבוץ
                 </button>
 
                 <label className="file-action-button">

@@ -16,7 +16,7 @@ export default function LoadItem({
   onSelectLoadUnit,
   onAssignGroup,
   onHighlightGroup,
-  selectedCellHint,
+  availableForSelectedCell,
 }) {
   const [showTooltip, setShowTooltip] = useState(false);
 
@@ -89,10 +89,7 @@ export default function LoadItem({
           highlightedGroup ? "group-highlight" : "",
           teacherHighlight ? "teacher-search-highlight" : "",
           selectedLoadUnitId === unit.id ? "selected-load-item" : "",
-          selectedCellHint === "available" ? "available-for-selected-cell" : "",
-          selectedCellHint === "notSameTimeConflict"
-            ? "not-same-time-candidate"
-            : "",
+          availableForSelectedCell ? "available-for-selected-cell" : "",
         ].join(" ")}
       >
         <span className="load-teacher-code">{label}</span>
