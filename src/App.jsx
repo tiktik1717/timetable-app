@@ -1214,6 +1214,77 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  function buildEmptyScheduleTemplate() {
+    const emptySchedule = {};
+
+    for (const day of days) {
+      emptySchedule[day] = {};
+
+      for (const className of classes) {
+        const configuredHours =
+          Number(dailyHoursByClass?.[className]?.[day]) || 0;
+
+        const existingHourNumbers = Object.keys(
+          schedule?.[day]?.[className] || {}
+        )
+          .map((hour) => Number(hour))
+          .filter((hour) => Number.isFinite(hour) && hour > 0);
+
+        const maxExistingHour =
+          existingHourNumbers.length > 0
+            ? Math.max(...existingHourNumbers)
+            : 0;
+
+        const maxHour = Math.max(configuredHours, maxExistingHour);
+
+        emptySchedule[day][className] = {};
+
+        for (let hour = 1; hour <= maxHour; hour++) {
+          emptySchedule[day][className][hour] = [];
+        }
+      }
+    }
+
+    return emptySchedule;
+  }
+
+  function saveSchedulingMetadataToFile() {
+    const metadataData = {
+      version: 1,
+      savedAt: new Date().toISOString(),
+      exportType: "scheduling-metadata-only",
+      exportNotes: {
+        containsExistingSchedule: false,
+        scheduleCellFormat:
+          "Each schedule cell is an array of teachingUnit ids.",
+        purpose:
+          "Metadata-only export for creating a new timetable without exposing the existing solution.",
+      },
+      schoolData,
+      schedule: buildEmptyScheduleTemplate(),
+      teacherHighlights: [],
+      checkpoints: [],
+      currentCheckpointId: "",
+      comparisonCheckpointId: "",
+    };
+
+    const json = JSON.stringify(metadataData, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `school-timetable-metadata-${new Date()
+      .toISOString()
+      .slice(0, 10)}.json`;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    URL.revokeObjectURL(url);
+  }
+
   function clearProject() {
     if (!confirm("האם למחוק את כל השיבוצים?")) return;
 
@@ -5040,6 +5111,7 @@ export default function App() {
         {activeView === "file" && (
           <FileManager
             saveProjectToFile={saveProjectToFile}
+            saveSchedulingMetadataToFile={saveSchedulingMetadataToFile}
             loadProjectFromFile={loadProjectFromFile}
             handleExcelUpload={handleExcelUpload}
             clearProject={clearProject}
