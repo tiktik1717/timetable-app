@@ -23,6 +23,8 @@ import {
   constraintGroups as mockConstraintGroups,
 } from "./data/mockData";
 
+import { createSchedulingAgentContext } from "./scheduling/agentContext";
+import { validateSchedule } from "./scheduling/scheduleValidator";
 import WarningsPanel from "./components/WarningsPanel";
 import ConstraintGroupDialog from "./components/ConstraintGroupDialog";
 import ShahafView from "./components/ShahafView";
@@ -83,6 +85,13 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!schoolData?.teachingUnits?.length) {
+      return;
+    }
+
+    debugValidateCurrentSchedule();
+  }, []);
 
   const panelsMenuRef = useRef(null);
   const [dragSource, setDragSource] = useState(null);
@@ -3370,13 +3379,17 @@ export default function App() {
     }
   }
 
-  function getUnitPlacements(unitId) {
+  function getUnitPlacements(unitId, scheduleObject = schedule) {
     const placements = [];
 
-    for (const day of days) {
-      for (const className of classes) {
-        for (const hour of hours) {
-          const unitIds = getCellUnitIds(day, className, hour);
+    for (const [day, daySchedule] of Object.entries(scheduleObject || {})) {
+      for (const [className, classSchedule] of Object.entries(daySchedule || {})) {
+        for (const [hour, cellValue] of Object.entries(classSchedule || {})) {
+          const unitIds = Array.isArray(cellValue)
+            ? cellValue
+            : cellValue
+              ? [cellValue]
+              : [];
 
           if (unitIds.includes(unitId)) {
             placements.push(`${day}-${hour}`);
@@ -4403,6 +4416,67 @@ export default function App() {
       percentage,
     };
   })();
+
+  function debugValidateCurrentSchedule() {
+    const report = validateSchedule({
+      schedule,
+      schoolData,
+      approvedExceptions: [
+        {
+          type: "meetingParticipant",
+          meetingId: "meeting-1785136295118",
+          teacherId: "7",
+        },
+      ],
+    });
+
+    const agentContext =
+      createSchedulingAgentContext({
+        schoolData,
+        schedule,
+        approvedExceptions: [
+          {
+            type: "meetingParticipant",
+            meetingId: "meeting-1785136295118",
+            teacherId: "7",
+          },
+        ],
+        rules: [],
+      });
+
+    console.log(
+      "Scheduling agent context:",
+      agentContext
+    );
+
+    console.group("Scheduling validator report");
+
+    console.log("Valid:", report.valid);
+    console.log("Statistics:", report.statistics);
+    console.log(
+      "Missing units:",
+      report.missingUnits
+    );
+    if (report.errors.length > 0) {
+      console.group("Errors");
+      report.errors.forEach((error, index) => {
+        console.log(index + 1, error);
+      });
+      console.groupEnd();
+    }
+
+    if (report.warnings.length > 0) {
+      console.group("Warnings");
+      report.warnings.forEach((warning, index) => {
+        console.log(index + 1, warning);
+      });
+      console.groupEnd();
+    }
+
+    console.groupEnd();
+
+    return report;
+  }
 
   return (
 
