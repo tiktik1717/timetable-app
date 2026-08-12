@@ -9,6 +9,7 @@ import {
 
 import "./App.css";
 
+import SchedulingAgentView from "./components/SchedulingAgentView";
 import DroppableCell from "./components/DroppableCell";
 import LoadItem from "./components/LoadItem";
 import LoadCell from "./components/LoadCell";
@@ -46,6 +47,8 @@ import { HELP_TEXT } from "./helpText";
 import FreeDaysView from "./components/FreeDaysView";
 import SchedulingProgressPanel from "./components/SchedulingProgressPanel";
 
+const SCHEDULING_AGENT_STORAGE_KEY = "scheduling-agent-workspace-v1";
+
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
 
@@ -66,7 +69,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("schoolSchedule", JSON.stringify(schedule));
   }, [schedule]);
-
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -109,7 +111,8 @@ export default function App() {
   const [groupSearchText, setGroupSearchText] = useState("");
   const [singleDragUnitId, setSingleDragUnitId] = useState(null);
   const [highlightedGroupId, setHighlightedGroupId] = useState(null);
-  const [showConstraintGroupDialog, setShowConstraintGroupDialog] = useState(false);
+  const [showConstraintGroupDialog, setShowConstraintGroupDialog] =
+    useState(false);
   const [editingConstraintGroup, setEditingConstraintGroup] = useState(null);
   const [activeView, setActiveView] = useState("scheduler");
   const [selectedLoadUnitId, setSelectedLoadUnitId] = useState(null);
@@ -165,6 +168,114 @@ export default function App() {
     return [];
   });
 
+  const [schedulingAgentRules, setSchedulingAgentRules] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SCHEDULING_AGENT_STORAGE_KEY);
+
+      if (!saved) {
+        return [];
+      }
+
+      const parsed = JSON.parse(saved);
+
+      return Array.isArray(parsed.rules) ? parsed.rules : [];
+    } catch (error) {
+      console.error("Failed to load scheduling agent rules:", error);
+
+      return [];
+    }
+  });
+
+  const [
+    schedulingAgentApprovedExceptions,
+    setSchedulingAgentApprovedExceptions,
+  ] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SCHEDULING_AGENT_STORAGE_KEY);
+
+      if (!saved) {
+        return [];
+      }
+
+      const parsed = JSON.parse(saved);
+
+      return Array.isArray(parsed.approvedExceptions)
+        ? parsed.approvedExceptions
+        : [];
+    } catch (error) {
+      console.error("Failed to load scheduling agent exceptions:", error);
+
+      return [];
+    }
+  });
+
+  const [schedulingAgentMessages, setSchedulingAgentMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SCHEDULING_AGENT_STORAGE_KEY);
+
+      if (!saved) {
+        return [
+          {
+            id: "welcome",
+            role: "agent",
+            type: "message",
+            text: "שלום, אני סוכן השיבוץ. כרגע אני מחובר לנתוני המערכת במצב קריאה בלבד.",
+            createdAt: new Date().toISOString(),
+            actions: [],
+          },
+        ];
+      }
+
+      const parsed = JSON.parse(saved);
+
+      if (Array.isArray(parsed.messages) && parsed.messages.length > 0) {
+        return parsed.messages;
+      }
+
+      return [
+        {
+          id: "welcome",
+          role: "agent",
+          type: "message",
+          text: "שלום, אני סוכן השיבוץ. כרגע אני מחובר לנתוני המערכת במצב קריאה בלבד.",
+          createdAt: new Date().toISOString(),
+          actions: [],
+        },
+      ];
+    } catch (error) {
+      console.error("Failed to load scheduling agent messages:", error);
+
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const workspace = {
+        version: 1,
+
+        rules: schedulingAgentRules,
+
+        approvedExceptions: schedulingAgentApprovedExceptions,
+
+        messages: schedulingAgentMessages,
+
+        updatedAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem(
+        SCHEDULING_AGENT_STORAGE_KEY,
+        JSON.stringify(workspace),
+      );
+    } catch (error) {
+      console.error("Failed to save scheduling agent workspace:", error);
+    }
+  }, [
+    schedulingAgentRules,
+    schedulingAgentApprovedExceptions,
+    schedulingAgentMessages,
+  ]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -203,10 +314,7 @@ export default function App() {
         return;
       }
 
-      if (
-        event === "SIGNED_IN" ||
-        event === "USER_UPDATED"
-      ) {
+      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
         const nextUser = session?.user || null;
 
         setUser((currentUser) => {
@@ -247,17 +355,13 @@ export default function App() {
 
   useEffect(() => {
     if (selectedCloudProjectId) {
-      localStorage.setItem(
-        "selectedCloudProjectId",
-        selectedCloudProjectId
-      );
+      localStorage.setItem("selectedCloudProjectId", selectedCloudProjectId);
     }
   }, [selectedCloudProjectId]);
 
   useEffect(() => {
     localStorage.setItem("checkpoints", JSON.stringify(checkpoints));
   }, [checkpoints]);
-
 
   const [currentCheckpointId, setCurrentCheckpointId] = useState(() => {
     return localStorage.getItem("currentCheckpointId") || "";
@@ -286,9 +390,11 @@ export default function App() {
   }, [currentCheckpointId]);
 
   useEffect(() => {
-    localStorage.setItem("comparisonCheckpointId", comparisonCheckpointId || "");
+    localStorage.setItem(
+      "comparisonCheckpointId",
+      comparisonCheckpointId || "",
+    );
   }, [comparisonCheckpointId]);
-
 
   const [schoolData, setSchoolData] = useState(() => {
     const defaultData = {
@@ -301,15 +407,10 @@ export default function App() {
       constraintGroups: mockConstraintGroups,
       homeroomTeacherColor: "#c8e6c9",
       meetings: [],
-      dailyHoursByClass: createDefaultDailyHours(
-        mockClasses,
-        mockDays,
-        6
-      ),
+      dailyHoursByClass: createDefaultDailyHours(mockClasses, mockDays, 6),
     };
 
-    const savedSchoolData =
-      localStorage.getItem("schoolData");
+    const savedSchoolData = localStorage.getItem("schoolData");
 
     if (savedSchoolData) {
       return ensureDailyHoursForClasses({
@@ -352,12 +453,24 @@ export default function App() {
   } = schoolData;
 
   const [selectedClassForShahaf, setSelectedClassForShahaf] = useState(
-    classes[0] || ""
+    classes[0] || "",
   );
   const [selectedTeacherForView, setSelectedTeacherForView] = useState(
-    teachers[0]?.id || ""
+    teachers[0]?.id || "",
   );
 
+  const schedulingAgentValidationReport = validateSchedule({
+    schedule,
+    schoolData,
+    approvedExceptions: schedulingAgentApprovedExceptions,
+  });
+
+  const schedulingAgentContext = createSchedulingAgentContext({
+    schoolData,
+    schedule,
+    approvedExceptions: schedulingAgentApprovedExceptions,
+    rules: schedulingAgentRules,
+  });
 
   function createDefaultDailyHours(classes, days, defaultHours = 6) {
     const result = {};
@@ -396,7 +509,7 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(
       "teacherHighlights",
-      JSON.stringify(teacherHighlights)
+      JSON.stringify(teacherHighlights),
     );
   }, [teacherHighlights]);
 
@@ -426,19 +539,20 @@ export default function App() {
       try {
         await loadCloudProjects();
 
-        const savedProjectId =
-          localStorage.getItem("selectedCloudProjectId");
+        const savedProjectId = localStorage.getItem("selectedCloudProjectId");
 
         if (savedProjectId) {
-          const loadedSuccessfully =
-            await loadCloudProjectById(savedProjectId, {
+          const loadedSuccessfully = await loadCloudProjectById(
+            savedProjectId,
+            {
               showAlert: false,
-            });
+            },
+          );
 
           if (!loadedSuccessfully) {
             console.warn(
               "לא ניתן היה לטעון את פרויקט הענן האחרון:",
-              savedProjectId
+              savedProjectId,
             );
           }
         }
@@ -455,7 +569,6 @@ export default function App() {
 
     initializeCloudProjects();
   }, [authInitialized, user?.id]);
-
 
   useEffect(() => {
     if (!user || !selectedCloudProjectId || !hasUnsavedCloudChanges) return;
@@ -517,21 +630,14 @@ export default function App() {
     };
   }
 
-  async function loadCloudProjectById(
-    projectId,
-    options = {}
-  ) {
+  async function loadCloudProjectById(projectId, options = {}) {
     console.trace("loadCloudProjectById");
     const { showAlert = true, forceReload = false } = options;
 
-    if (
-      !forceReload &&
-      loadedCloudProjectIdRef.current === projectId
-    ) {
+    if (!forceReload && loadedCloudProjectIdRef.current === projectId) {
       console.log("הפרויקט כבר טעון — דילוג על טעינה חוזרת");
       return true;
     }
-
 
     if (!user) {
       alert("יש להתחבר לפני טעינה מהענן");
@@ -557,34 +663,29 @@ export default function App() {
       const projectData = data.data || {};
 
       const normalizedSchoolData = ensureDailyHoursForClasses(
-        projectData.schoolData
+        projectData.schoolData,
       );
 
       const nextCheckpoints = Array.isArray(projectData.checkpoints)
         ? projectData.checkpoints
         : [];
 
-      const nextCurrentCheckpointId =
-        nextCheckpoints.some(
-          (checkpoint) =>
-            checkpoint.id === projectData.currentCheckpointId
-        )
-          ? projectData.currentCheckpointId
-          : "";
+      const nextCurrentCheckpointId = nextCheckpoints.some(
+        (checkpoint) => checkpoint.id === projectData.currentCheckpointId,
+      )
+        ? projectData.currentCheckpointId
+        : "";
 
-      const nextComparisonCheckpointId =
-        nextCheckpoints.some(
-          (checkpoint) =>
-            checkpoint.id === projectData.comparisonCheckpointId
-        )
-          ? projectData.comparisonCheckpointId
-          : "";
+      const nextComparisonCheckpointId = nextCheckpoints.some(
+        (checkpoint) => checkpoint.id === projectData.comparisonCheckpointId,
+      )
+        ? projectData.comparisonCheckpointId
+        : "";
 
       setSchoolData(normalizedSchoolData);
       setSchedule(projectData.schedule || {});
       setTeacherHighlights(
-        projectData.teacherHighlights ||
-        createDefaultTeacherHighlights()
+        projectData.teacherHighlights || createDefaultTeacherHighlights(),
       );
 
       // רשימת נקודות שמירה חדשה ונפרדת לפרויקט שנטען
@@ -598,41 +699,26 @@ export default function App() {
       setSelectedCloudProjectId(projectId);
       loadedCloudProjectIdRef.current = projectId;
       setHasUnsavedCloudChanges(false);
-      setLastCloudSavedAt(
-        new Date().toLocaleTimeString("he-IL")
-      );
+      setLastCloudSavedAt(new Date().toLocaleTimeString("he-IL"));
 
-      localStorage.setItem(
-        "schoolData",
-        JSON.stringify(normalizedSchoolData)
-      );
+      localStorage.setItem("schoolData", JSON.stringify(normalizedSchoolData));
       localStorage.setItem(
         "schoolSchedule",
-        JSON.stringify(projectData.schedule || {})
+        JSON.stringify(projectData.schedule || {}),
       );
       localStorage.setItem(
         "teacherHighlights",
         JSON.stringify(
-          projectData.teacherHighlights ||
-          createDefaultTeacherHighlights()
-        )
+          projectData.teacherHighlights || createDefaultTeacherHighlights(),
+        ),
       );
-      localStorage.setItem(
-        "checkpoints",
-        JSON.stringify(nextCheckpoints)
-      );
-      localStorage.setItem(
-        "currentCheckpointId",
-        nextCurrentCheckpointId
-      );
+      localStorage.setItem("checkpoints", JSON.stringify(nextCheckpoints));
+      localStorage.setItem("currentCheckpointId", nextCurrentCheckpointId);
       localStorage.setItem(
         "comparisonCheckpointId",
-        nextComparisonCheckpointId
+        nextComparisonCheckpointId,
       );
-      localStorage.setItem(
-        "selectedCloudProjectId",
-        projectId
-      );
+      localStorage.setItem("selectedCloudProjectId", projectId);
 
       if (showAlert) {
         alert(`הפרויקט "${data.name}" נטען מהענן2`);
@@ -649,7 +735,6 @@ export default function App() {
   }
 
   async function handleCloudProjectSelection(projectId) {
-
     if (!projectId) {
       setSelectedCloudProjectId("");
       return;
@@ -657,7 +742,7 @@ export default function App() {
 
     if (hasUnsavedCloudChanges && selectedCloudProjectId) {
       const shouldSaveFirst = confirm(
-        "יש שינויים שלא נשמרו בענן.\n\nלחץ אישור כדי לשמור את הפרויקט הנוכחי ואז לטעון את הפרויקט שנבחר.\nלחץ ביטול כדי לטעון בלי לשמור."
+        "יש שינויים שלא נשמרו בענן.\n\nלחץ אישור כדי לשמור את הפרויקט הנוכחי ואז לטעון את הפרויקט שנבחר.\nלחץ ביטול כדי לטעון בלי לשמור.",
       );
 
       if (shouldSaveFirst) {
@@ -846,7 +931,6 @@ export default function App() {
     await loadCloudProjects();
   }
 
-
   function undo() {
     const currentHistory = historyRef.current;
 
@@ -872,9 +956,7 @@ export default function App() {
   function isCellLocked(day, className, hour) {
     const unitIds = getCellUnitIds(day, className, hour);
 
-    return unitIds.some((unitId) =>
-      isUnitLocked(day, className, hour, unitId)
-    );
+    return unitIds.some((unitId) => isUnitLocked(day, className, hour, unitId));
   }
 
   function requestPurpleHoleCheck() {
@@ -889,7 +971,7 @@ export default function App() {
     if (unitIds.length === 0) return;
 
     const shouldUnlock = unitIds.some((unitId) =>
-      isUnitLocked(day, className, hour, unitId)
+      isUnitLocked(day, className, hour, unitId),
     );
 
     setLockedPlacements((prev) => {
@@ -904,7 +986,7 @@ export default function App() {
           const groupUnits = getScheduledSameTimeGroupUnitsAt(
             day,
             hour,
-            unit.constraintGroupId
+            unit.constraintGroupId,
           );
 
           for (const groupUnit of groupUnits) {
@@ -912,7 +994,7 @@ export default function App() {
               day,
               groupUnit.className,
               hour,
-              groupUnit.id
+              groupUnit.id,
             );
 
             if (shouldUnlock) {
@@ -963,7 +1045,7 @@ export default function App() {
     day,
     className,
     hour,
-    options = {}
+    options = {},
   ) {
     const ignoredUnitIds = new Set(options.ignoredUnitIds || []);
 
@@ -985,7 +1067,7 @@ export default function App() {
           scheduleObject,
           day,
           className,
-          currentHour
+          currentHour,
         );
 
         for (const unitId of unitIds) {
@@ -1006,7 +1088,7 @@ export default function App() {
           scheduleObject,
           day,
           currentClassName,
-          hour
+          hour,
         );
 
         for (const unitId of unitIds) {
@@ -1118,7 +1200,7 @@ export default function App() {
             newSchedule,
             day,
             className,
-            hour
+            hour,
           );
 
           for (const unitId of unitIds) {
@@ -1140,7 +1222,7 @@ export default function App() {
             newSchedule,
             day,
             className,
-            hour
+            hour,
           );
 
           const nextUnitIds = unitIds.filter((unitId) => {
@@ -1166,7 +1248,7 @@ export default function App() {
               newSchedule,
               day,
               className,
-              hour
+              hour,
             );
 
             const nextUnitIds = unitIds.filter((unitId) => {
@@ -1234,15 +1316,13 @@ export default function App() {
           Number(dailyHoursByClass?.[className]?.[day]) || 0;
 
         const existingHourNumbers = Object.keys(
-          schedule?.[day]?.[className] || {}
+          schedule?.[day]?.[className] || {},
         )
           .map((hour) => Number(hour))
           .filter((hour) => Number.isFinite(hour) && hour > 0);
 
         const maxExistingHour =
-          existingHourNumbers.length > 0
-            ? Math.max(...existingHourNumbers)
-            : 0;
+          existingHourNumbers.length > 0 ? Math.max(...existingHourNumbers) : 0;
 
         const maxHour = Math.max(configuredHours, maxExistingHour);
 
@@ -1348,14 +1428,14 @@ export default function App() {
     const unitIds = getCellUnitIds(
       selectedDay,
       selectedCell.className,
-      selectedCell.hour
+      selectedCell.hour,
     );
 
     return new Set(
       unitIds
         .map(getUnitById)
         .filter(Boolean)
-        .map((unit) => unit.teacherId)
+        .map((unit) => unit.teacherId),
     );
   }
 
@@ -1377,7 +1457,7 @@ export default function App() {
 
   function getComparisonCheckpoint() {
     return checkpoints.find(
-      (checkpoint) => checkpoint.id === comparisonCheckpointId
+      (checkpoint) => checkpoint.id === comparisonCheckpointId,
     );
   }
 
@@ -1389,12 +1469,17 @@ export default function App() {
     return Array.isArray(value) ? value : [value];
   }
 
-  function getTeacherNamesForScheduleCell(scheduleObject, day, className, hour) {
+  function getTeacherNamesForScheduleCell(
+    scheduleObject,
+    day,
+    className,
+    hour,
+  ) {
     const unitIds = getCellUnitIdsFromAnySchedule(
       scheduleObject,
       day,
       className,
-      hour
+      hour,
     );
 
     return unitIds
@@ -1415,14 +1500,14 @@ export default function App() {
       schedule,
       day,
       className,
-      hour
+      hour,
     );
 
     const checkpointValue = getTeacherNamesForScheduleCell(
       checkpoint.schedule || {},
       day,
       className,
-      hour
+      hour,
     );
 
     return currentValue !== checkpointValue;
@@ -1466,8 +1551,7 @@ export default function App() {
     const g = parseInt(color.substring(2, 4), 16);
     const b = parseInt(color.substring(4, 6), 16);
 
-    const brightness =
-      (r * 299 + g * 587 + b * 114) / 1000;
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
 
     return brightness > 140 ? "#000" : "#fff";
   }
@@ -1485,7 +1569,6 @@ export default function App() {
 
     return total;
   }
-
 
   function createCheckpoint() {
     const name = prompt("שם נקודת השמירה");
@@ -1515,7 +1598,12 @@ export default function App() {
     });
 
     setCurrentCheckpointId(newCheckpoint.id);
-    setComparisonCheckpointId(getPreviousCheckpointId(newCheckpoint.id, [newCheckpoint, ...checkpoints]));
+    setComparisonCheckpointId(
+      getPreviousCheckpointId(newCheckpoint.id, [
+        newCheckpoint,
+        ...checkpoints,
+      ]),
+    );
   }
 
   function getActivePlacementTeacherId() {
@@ -1588,7 +1676,7 @@ export default function App() {
           newSchedule,
           day,
           className,
-          hour
+          hour,
         );
 
         for (const unitId of unitIds) {
@@ -1610,7 +1698,7 @@ export default function App() {
           newSchedule,
           day,
           className,
-          hour
+          hour,
         );
 
         const nextUnitIds = unitIds.filter((unitId) => {
@@ -1636,7 +1724,7 @@ export default function App() {
             newSchedule,
             day,
             className,
-            hour
+            hour,
           );
 
           const nextUnitIds = unitIds.filter((unitId) => {
@@ -1666,10 +1754,12 @@ export default function App() {
 
   function getPreviousCheckpointId(checkpointId, checkpointList = checkpoints) {
     const sorted = [...checkpointList].sort(
-      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
     );
 
-    const index = sorted.findIndex((checkpoint) => checkpoint.id === checkpointId);
+    const index = sorted.findIndex(
+      (checkpoint) => checkpoint.id === checkpointId,
+    );
 
     if (index === -1 || index === sorted.length - 1) return "";
 
@@ -1680,7 +1770,7 @@ export default function App() {
     if (!confirm("למחוק את נקודת השמירה?")) return;
 
     setCheckpoints((prev) =>
-      prev.filter((checkpoint) => checkpoint.id !== checkpointId)
+      prev.filter((checkpoint) => checkpoint.id !== checkpointId),
     );
 
     if (currentCheckpointId === checkpointId) {
@@ -1724,12 +1814,16 @@ export default function App() {
 
     if (!checkpoint) return;
 
-    if (!confirm("לשחזר את המערכת לנקודת השמירה הזו? הפעולה תחליף את המצב הנוכחי.")) {
+    if (
+      !confirm(
+        "לשחזר את המערכת לנקודת השמירה הזו? הפעולה תחליף את המצב הנוכחי.",
+      )
+    ) {
       return;
     }
 
     const normalizedSchoolData = ensureDailyHoursForClasses(
-      checkpoint.schoolData
+      checkpoint.schoolData,
     );
 
     setSchoolData(normalizedSchoolData);
@@ -1740,7 +1834,7 @@ export default function App() {
     localStorage.setItem("schoolData", JSON.stringify(normalizedSchoolData));
     localStorage.setItem(
       "schoolSchedule",
-      JSON.stringify(checkpoint.schedule || {})
+      JSON.stringify(checkpoint.schedule || {}),
     );
 
     setCurrentCheckpointId(checkpointId);
@@ -1774,7 +1868,7 @@ export default function App() {
       const alreadyInTarget = getCellUnitIds(
         selectedDay,
         candidate.className,
-        hour
+        hour,
       ).includes(candidate.id);
 
       if (alreadyInTarget) return false;
@@ -1838,12 +1932,7 @@ export default function App() {
       const unitsToPlace = getSameTimeGroupUnits(unit);
 
       return unitsToPlace.every((candidate) =>
-        canUnitFillCell(
-          candidate,
-          selectedDay,
-          candidate.className,
-          hour
-        )
+        canUnitFillCell(candidate, selectedDay, candidate.className, hour),
       );
     });
 
@@ -1853,7 +1942,9 @@ export default function App() {
     }
 
     if (candidates.length > 1) {
-      alert(`נמצאו ${candidates.length} אפשרויות שיבוץ. השיבוץ האוטומטי פועל רק כאשר יש אפשרות יחידה.`);
+      alert(
+        `נמצאו ${candidates.length} אפשרויות שיבוץ. השיבוץ האוטומטי פועל רק כאשר יש אפשרות יחידה.`,
+      );
       return;
     }
 
@@ -1863,8 +1954,10 @@ export default function App() {
     const invalidUnits = unitsToPlace.filter((candidate) => {
       if (isBlockedCell(candidate.className, selectedDay, hour)) return true;
       if (isCellLocked(selectedDay, candidate.className, hour)) return true;
-      if (isUnitConstraintGroupBlockedAt(candidate, selectedDay, hour)) return true;
-      if (!canTeacherWorkAt(candidate.teacherId, selectedDay, hour)) return true;
+      if (isUnitConstraintGroupBlockedAt(candidate, selectedDay, hour))
+        return true;
+      if (!canTeacherWorkAt(candidate.teacherId, selectedDay, hour))
+        return true;
 
       return false;
     });
@@ -1902,9 +1995,9 @@ export default function App() {
       ...days.map((day) =>
         Math.max(
           0,
-          ...classes.map((className) => getClassHoursForDay(className, day))
-        )
-      )
+          ...classes.map((className) => getClassHoursForDay(className, day)),
+        ),
+      ),
     );
 
     for (const day of days) {
@@ -1974,8 +2067,6 @@ export default function App() {
     return false;
   }
 
-
-
   function getDailyBalanceColor(className, day) {
     const remaining = getRemainingHoursForClassInDay(className, day);
     const unfilledHours = getUnfilledHoursForClassInDay(className, day);
@@ -1999,7 +2090,11 @@ export default function App() {
 
   function getSelectedCellUnitHint(
     unit,
-    { allowAlreadyScheduledUnit = false, sourceClassName = null, sourceHour = null } = {}
+    {
+      allowAlreadyScheduledUnit = false,
+      sourceClassName = null,
+      sourceHour = null,
+    } = {},
   ) {
     if (!selectedCell || !unit) return null;
 
@@ -2020,10 +2115,7 @@ export default function App() {
       return null;
     }
 
-    if (
-      getRemainingUnitHours(unit.id) <= 0 &&
-      !allowAlreadyScheduledUnit
-    ) {
+    if (getRemainingUnitHours(unit.id) <= 0 && !allowAlreadyScheduledUnit) {
       return null;
     }
 
@@ -2036,13 +2128,7 @@ export default function App() {
       return null;
     }
 
-    if (
-      isTeacherBusyAt(
-        unit.teacherId,
-        selectedDay,
-        selectedCell.hour
-      )
-    ) {
+    if (isTeacherBusyAt(unit.teacherId, selectedDay, selectedCell.hour)) {
       return null;
     }
 
@@ -2051,7 +2137,7 @@ export default function App() {
         selectedCell.className,
         selectedCell.hour,
         unit,
-        selectedDay
+        selectedDay,
       )
     ) {
       return null;
@@ -2062,7 +2148,7 @@ export default function App() {
         selectedCell.className,
         selectedCell.hour,
         unit,
-        selectedDay
+        selectedDay,
       )
     ) {
       return "notSameTimeConflict";
@@ -2088,19 +2174,18 @@ export default function App() {
       }
 
       const normalizedSchoolData = ensureDailyHoursForClasses(
-        projectData.schoolData
+        projectData.schoolData,
       );
 
       setSchoolData(normalizedSchoolData);
       setSchedule(projectData.schedule || {});
       setTeacherHighlights(
-        projectData.teacherHighlights || createDefaultTeacherHighlights()
+        projectData.teacherHighlights || createDefaultTeacherHighlights(),
       );
-
 
       setCheckpoints(projectData.checkpoints || []);
       setCurrentCheckpointId(
-        projectData.currentCheckpointId || projectData.activeCheckpointId || ""
+        projectData.currentCheckpointId || projectData.activeCheckpointId || "",
       );
 
       setComparisonCheckpointId(projectData.comparisonCheckpointId || "");
@@ -2111,28 +2196,28 @@ export default function App() {
       localStorage.setItem("schoolData", JSON.stringify(normalizedSchoolData));
       localStorage.setItem(
         "schoolSchedule",
-        JSON.stringify(projectData.schedule || {})
+        JSON.stringify(projectData.schedule || {}),
       );
       localStorage.setItem(
         "teacherHighlights",
         JSON.stringify(
-          projectData.teacherHighlights || createDefaultTeacherHighlights()
-        )
+          projectData.teacherHighlights || createDefaultTeacherHighlights(),
+        ),
       );
 
       localStorage.setItem(
         "checkpoints",
-        JSON.stringify(projectData.checkpoints || [])
+        JSON.stringify(projectData.checkpoints || []),
       );
 
       localStorage.setItem(
         "currentCheckpointId",
-        projectData.currentCheckpointId || projectData.activeCheckpointId || ""
+        projectData.currentCheckpointId || projectData.activeCheckpointId || "",
       );
 
       localStorage.setItem(
         "comparisonCheckpointId",
-        projectData.comparisonCheckpointId || ""
+        projectData.comparisonCheckpointId || "",
       );
 
       alert("הפרויקט נטען בהצלחה");
@@ -2179,8 +2264,8 @@ export default function App() {
       ...classes.map((className) =>
         shouldShowClassInSelectedDay(className)
           ? getClassHoursForDay(className, day)
-          : 0
-      )
+          : 0,
+      ),
     );
   }
 
@@ -2206,10 +2291,7 @@ export default function App() {
     };
   }
 
-  function buildTeachingUnitsFromSheetRows(
-    sheetRows,
-    existingUnits = []
-  ) {
+  function buildTeachingUnitsFromSheetRows(sheetRows, existingUnits = []) {
     const desiredHoursByKey = new Map();
 
     for (const row of sheetRows) {
@@ -2220,10 +2302,7 @@ export default function App() {
       }
 
       const key = `${row.className}|${row.teacherId}`;
-      desiredHoursByKey.set(
-        key,
-        (desiredHoursByKey.get(key) || 0) + hours
-      );
+      desiredHoursByKey.set(key, (desiredHoursByKey.get(key) || 0) + hours);
     }
 
     const existingUnitsByKey = new Map();
@@ -2283,14 +2362,12 @@ export default function App() {
 
       const currentTotal = currentUnits.reduce(
         (sum, unit) => sum + (Number(unit.hours) || 0),
-        0
+        0,
       );
 
       if (desiredHours > currentTotal) {
         const extraHours = desiredHours - currentTotal;
-        const freeUnit = currentUnits.find(
-          (unit) => !unit.constraintGroupId
-        );
+        const freeUnit = currentUnits.find((unit) => !unit.constraintGroupId);
 
         if (freeUnit) {
           freeUnit.hours = (Number(freeUnit.hours) || 0) + extraHours;
@@ -2317,10 +2394,7 @@ export default function App() {
         for (const unit of reductionOrder) {
           if (hoursToRemove <= 0) break;
 
-          const removable = Math.min(
-            Number(unit.hours) || 0,
-            hoursToRemove
-          );
+          const removable = Math.min(Number(unit.hours) || 0, hoursToRemove);
 
           unit.hours = (Number(unit.hours) || 0) - removable;
           hoursToRemove -= removable;
@@ -2334,7 +2408,7 @@ export default function App() {
             ...unit,
             className,
             teacherId,
-          }))
+          })),
       );
     }
 
@@ -2382,7 +2456,7 @@ export default function App() {
   function trimScheduleToUnitHours(nextUnits) {
     const validUnitIds = new Set(nextUnits.map((unit) => unit.id));
     const hoursByUnitId = new Map(
-      nextUnits.map((unit) => [unit.id, Number(unit.hours) || 0])
+      nextUnits.map((unit) => [unit.id, Number(unit.hours) || 0]),
     );
 
     let removedCount = 0;
@@ -2398,7 +2472,7 @@ export default function App() {
               nextSchedule,
               day,
               className,
-              hour
+              hour,
             );
 
             const nextUnitIds = [];
@@ -2422,13 +2496,7 @@ export default function App() {
             }
 
             if (nextUnitIds.length !== currentUnitIds.length) {
-              setCellUnitIds(
-                nextSchedule,
-                day,
-                className,
-                hour,
-                nextUnitIds
-              );
+              setCellUnitIds(nextSchedule, day, className, hour, nextUnitIds);
             }
           }
         }
@@ -2438,7 +2506,9 @@ export default function App() {
     });
 
     if (removedCount > 0) {
-      alert(`בעקבות שינוי השעות הוסרו ${removedCount} שיבוצים שאינם תקפים עוד.`);
+      alert(
+        `בעקבות שינוי השעות הוסרו ${removedCount} שיבוצים שאינם תקפים עוד.`,
+      );
     }
   }
 
@@ -2453,7 +2523,14 @@ export default function App() {
       const classHours = getClassHoursForDay(className, dayToCheck);
 
       for (let hour = 1; hour <= classHours; hour++) {
-        if (isPurpleHoleCellInSchedule(scheduleObject, dayToCheck, className, hour)) {
+        if (
+          isPurpleHoleCellInSchedule(
+            scheduleObject,
+            dayToCheck,
+            className,
+            hour,
+          )
+        ) {
           holes.push({
             day: dayToCheck,
             className,
@@ -2473,7 +2550,7 @@ export default function App() {
       scheduleObject,
       day,
       className,
-      hour
+      hour,
     );
 
     if (unitIds.length > 0) return false;
@@ -2483,7 +2560,7 @@ export default function App() {
     }
 
     return !teachingUnits.some((unit) =>
-      canUnitFillCellInSchedule(unit, scheduleObject, day, className, hour)
+      canUnitFillCellInSchedule(unit, scheduleObject, day, className, hour),
     );
   }
 
@@ -2491,13 +2568,13 @@ export default function App() {
     if (!isTeamMeetingRow(className)) return false;
 
     const meetingUnits = teachingUnits.filter(
-      (unit) => unit.className === className && unit.type === "teamMeeting"
+      (unit) => unit.className === className && unit.type === "teamMeeting",
     );
 
     if (meetingUnits.length === 0) return false;
 
     return meetingUnits.every(
-      (unit) => getRemainingUnitHours(unit.id, scheduleObject) <= 0
+      (unit) => getRemainingUnitHours(unit.id, scheduleObject) <= 0,
     );
   }
 
@@ -2513,11 +2590,17 @@ export default function App() {
     }
 
     return !teachingUnits.some((unit) =>
-      canUnitFillCell(unit, day, className, hour)
+      canUnitFillCell(unit, day, className, hour),
     );
   }
 
-  function canUnitFillCellInSchedule(unit, scheduleObject, day, className, hour) {
+  function canUnitFillCellInSchedule(
+    unit,
+    scheduleObject,
+    day,
+    className,
+    hour,
+  ) {
     if (!unit) return false;
 
     if (unit.className !== className) return false;
@@ -2526,14 +2609,7 @@ export default function App() {
 
     if (!canTeacherWorkAt(unit.teacherId, day, hour)) return false;
 
-    if (
-      isTeacherBusyAtInSchedule(
-        unit.teacherId,
-        day,
-        hour,
-        scheduleObject
-      )
-    ) {
+    if (isTeacherBusyAtInSchedule(unit.teacherId, day, hour, scheduleObject)) {
       return false;
     }
 
@@ -2543,7 +2619,7 @@ export default function App() {
         scheduleObject,
         day,
         className,
-        hour
+        hour,
       )
     ) {
       return false;
@@ -2558,7 +2634,7 @@ export default function App() {
         scheduleObject,
         day,
         className,
-        hour
+        hour,
       );
 
       for (const unitId of unitIds) {
@@ -2576,21 +2652,20 @@ export default function App() {
   function updateSadinRows(nextRows) {
     requestPurpleHoleCheck();
 
-    const regularUnits =
-      buildTeachingUnitsFromSheetRows(
-        nextRows,
-        teachingUnits
-      );
+    const regularUnits = buildTeachingUnitsFromSheetRows(
+      nextRows,
+      teachingUnits,
+    );
 
     const meetingUnits = teachingUnits.filter(
-      (unit) => unit.type === "teamMeeting"
+      (unit) => unit.type === "teamMeeting",
     );
 
     const nextUnits = [...regularUnits, ...meetingUnits];
 
     const nextTeachingLoads = buildTeachingLoadsFromUnits(
       regularUnits,
-      classes
+      classes,
     );
 
     setSchoolData((prev) => ({
@@ -2612,9 +2687,7 @@ export default function App() {
 
   function isTeamMeetingRow(className) {
     return teachingUnits.some(
-      (unit) =>
-        unit.className === className &&
-        unit.type === "teamMeeting"
+      (unit) => unit.className === className && unit.type === "teamMeeting",
     );
   }
 
@@ -2628,7 +2701,9 @@ export default function App() {
 
   function splitUnitAndAssignGroup(unitId, groupId, hoursToAssign) {
     setSchoolData((prev) => {
-      const originalUnit = prev.teachingUnits.find((unit) => unit.id === unitId);
+      const originalUnit = prev.teachingUnits.find(
+        (unit) => unit.id === unitId,
+      );
 
       if (!originalUnit) return prev;
 
@@ -2794,7 +2869,7 @@ export default function App() {
           nextSchedule,
           day,
           className,
-          hour
+          hour,
         );
 
         const nextIds = currentIds.filter((unitId) => {
@@ -2816,18 +2891,22 @@ export default function App() {
   function toggleConstraintGroupBlockedSlot(groupId, day, hour) {
     const normalizedDay = normalizeDay(day);
     const hourNumber = Number(hour);
-    const wasBlocked = isConstraintGroupBlockedAt(groupId, normalizedDay, hourNumber);
+    const wasBlocked = isConstraintGroupBlockedAt(
+      groupId,
+      normalizedDay,
+      hourNumber,
+    );
 
     if (!wasBlocked) {
       const scheduledUnits = getScheduledUnitsForConstraintGroupAt(
         groupId,
         normalizedDay,
-        hourNumber
+        hourNumber,
       );
 
       if (scheduledUnits.length > 0) {
         const shouldContinue = confirm(
-          `בזמן זה קיימים ${scheduledUnits.length} שיבוצים מהקבוצה. חסימת הזמן תסיר אותם מהמערכת. להמשיך?`
+          `בזמן זה קיימים ${scheduledUnits.length} שיבוצים מהקבוצה. חסימת הזמן תסיר אותם מהמערכת. להמשיך?`,
         );
 
         if (!shouldContinue) return;
@@ -2836,7 +2915,7 @@ export default function App() {
         removeConstraintGroupFromSpecificTime(
           groupId,
           normalizedDay,
-          hourNumber
+          hourNumber,
         );
       }
     }
@@ -2851,7 +2930,9 @@ export default function App() {
 
         blockedSlots[normalizedDay] = wasBlocked
           ? dayHours.filter((item) => Number(item) !== hourNumber)
-          : [...new Set([...dayHours.map(Number), hourNumber])].sort((a, b) => a - b);
+          : [...new Set([...dayHours.map(Number), hourNumber])].sort(
+              (a, b) => a - b,
+            );
 
         return { ...group, blockedSlots };
       }),
@@ -2870,14 +2951,14 @@ export default function App() {
           scheduledCount += getScheduledUnitsForConstraintGroupAt(
             groupId,
             day,
-            hour
+            hour,
           ).length;
         }
       }
 
       if (scheduledCount > 0) {
         const shouldContinue = confirm(
-          `בקבוצה קיימים ${scheduledCount} שיבוצים. חסימת כל הזמנים תסיר אותם מהמערכת. להמשיך?`
+          `בקבוצה קיימים ${scheduledCount} שיבוצים. חסימת כל הזמנים תסיר אותם מהמערכת. להמשיך?`,
         );
 
         if (!shouldContinue) return;
@@ -2894,7 +2975,7 @@ export default function App() {
                   nextSchedule,
                   day,
                   className,
-                  hour
+                  hour,
                 );
 
                 const nextIds = currentIds.filter((unitId) => {
@@ -2903,13 +2984,7 @@ export default function App() {
                 });
 
                 if (nextIds.length !== currentIds.length) {
-                  setCellUnitIds(
-                    nextSchedule,
-                    day,
-                    className,
-                    hour,
-                    nextIds
-                  );
+                  setCellUnitIds(nextSchedule, day, className, hour, nextIds);
                 }
               }
             }
@@ -2922,14 +2997,14 @@ export default function App() {
 
     const blockedSlots = shouldBlock
       ? Object.fromEntries(
-        days.map((day) => [normalizeDay(day), hours.map(Number)])
-      )
+          days.map((day) => [normalizeDay(day), hours.map(Number)]),
+        )
       : {};
 
     setSchoolData((prev) => ({
       ...prev,
       constraintGroups: (prev.constraintGroups || []).map((item) =>
-        item.id === groupId ? { ...item, blockedSlots } : item
+        item.id === groupId ? { ...item, blockedSlots } : item,
       ),
     }));
   }
@@ -2937,13 +3012,13 @@ export default function App() {
   function saveConstraintGroup(groupToSave) {
     setSchoolData((prev) => {
       const exists = prev.constraintGroups.some(
-        (group) => group.id === groupToSave.id
+        (group) => group.id === groupToSave.id,
       );
 
       const constraintGroups = exists
         ? prev.constraintGroups.map((group) =>
-          group.id === groupToSave.id ? groupToSave : group
-        )
+            group.id === groupToSave.id ? groupToSave : group,
+          )
         : [...prev.constraintGroups, groupToSave];
 
       return {
@@ -2955,11 +3030,7 @@ export default function App() {
     setEditingConstraintGroup(null);
     setShowConstraintGroupDialog(false);
   }
-  function isTeacherCellChanged(
-    teacherId,
-    day,
-    hour
-  ) {
+  function isTeacherCellChanged(teacherId, day, hour) {
     const checkpoint = getComparisonCheckpoint();
 
     if (!checkpoint) return false;
@@ -2968,40 +3039,28 @@ export default function App() {
       schedule,
       teacherId,
       day,
-      hour
+      hour,
     );
 
     const checkpointClasses = getTeacherClassesForCell(
       checkpoint.schedule || {},
       teacherId,
       day,
-      hour
+      hour,
     );
 
     return currentClasses !== checkpointClasses;
   }
 
-  function getTeacherClassesForCell(
-    scheduleObject,
-    teacherId,
-    day,
-    hour
-  ) {
+  function getTeacherClassesForCell(scheduleObject, teacherId, day, hour) {
     const result = [];
 
     for (const className of classes) {
-      const unitIds =
-        scheduleObject?.[day]?.[className]?.[hour] || [];
+      const unitIds = scheduleObject?.[day]?.[className]?.[hour] || [];
 
-      const units = unitIds
-        .map(getUnitById)
-        .filter(Boolean);
+      const units = unitIds.map(getUnitById).filter(Boolean);
 
-      if (
-        units.some(
-          (unit) => unit.teacherId === teacherId
-        )
-      ) {
+      if (units.some((unit) => unit.teacherId === teacherId)) {
         result.push(className);
       }
     }
@@ -3017,12 +3076,12 @@ export default function App() {
     setSchoolData((prev) => ({
       ...prev,
       constraintGroups: prev.constraintGroups.filter(
-        (group) => group.id !== groupId
+        (group) => group.id !== groupId,
       ),
       teachingUnits: prev.teachingUnits.map((unit) =>
         unit.constraintGroupId === groupId
           ? { ...unit, constraintGroupId: null }
-          : unit
+          : unit,
       ),
     }));
 
@@ -3054,10 +3113,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    localStorage.setItem(
-      "schoolData",
-      JSON.stringify(schoolData)
-    );
+    localStorage.setItem("schoolData", JSON.stringify(schoolData));
   }, [schoolData]);
 
   function getUnitById(unitId) {
@@ -3196,7 +3252,10 @@ export default function App() {
         }
       }
 
-      if (event.ctrlKey && (event.key.toLowerCase() === "d" || event.key === "ג")) {
+      if (
+        event.ctrlKey &&
+        (event.key.toLowerCase() === "d" || event.key === "ג")
+      ) {
         event.preventDefault();
         setVisiblePanels((prev) => ({
           ...prev,
@@ -3205,10 +3264,7 @@ export default function App() {
         return;
       }
 
-      if (
-        event.ctrlKey &&
-        ["1", "2", "3", "4"].includes(event.key)
-      ) {
+      if (event.ctrlKey && ["1", "2", "3", "4"].includes(event.key)) {
         event.preventDefault();
         setVisiblePanels((prev) => ({
           ...prev,
@@ -3217,7 +3273,7 @@ export default function App() {
 
         setTimeout(() => {
           const input = document.querySelector(
-            `[data-highlight-index="${Number(event.key) - 1}"]`
+            `[data-highlight-index="${Number(event.key) - 1}"]`,
           );
           input?.focus();
           input?.select();
@@ -3282,8 +3338,12 @@ export default function App() {
     hours,
   ]);
 
-
-  function removeSameTimeGroupsFromTarget(newSchedule, day, hour, targetUnitIds) {
+  function removeSameTimeGroupsFromTarget(
+    newSchedule,
+    day,
+    hour,
+    targetUnitIds,
+  ) {
     const groupIdsToRemove = new Set();
 
     for (const unitId of targetUnitIds) {
@@ -3304,7 +3364,7 @@ export default function App() {
           newSchedule,
           day,
           unit.className,
-          hour
+          hour,
         );
 
         setCellUnitIds(
@@ -3312,7 +3372,7 @@ export default function App() {
           day,
           unit.className,
           hour,
-          currentUnits.filter((id) => id !== unit.id)
+          currentUnits.filter((id) => id !== unit.id),
         );
       }
     }
@@ -3383,7 +3443,9 @@ export default function App() {
     const placements = [];
 
     for (const [day, daySchedule] of Object.entries(scheduleObject || {})) {
-      for (const [className, classSchedule] of Object.entries(daySchedule || {})) {
+      for (const [className, classSchedule] of Object.entries(
+        daySchedule || {},
+      )) {
         for (const [hour, cellValue] of Object.entries(classSchedule || {})) {
           const unitIds = Array.isArray(cellValue)
             ? cellValue
@@ -3401,7 +3463,12 @@ export default function App() {
     return placements;
   }
 
-  function hasTeacherConflict(currentClass, hour, teacherId, day = selectedDay) {
+  function hasTeacherConflict(
+    currentClass,
+    hour,
+    teacherId,
+    day = selectedDay,
+  ) {
     const currentUnitIds = getCellUnitIds(day, currentClass, hour);
     const currentUnits = currentUnitIds
       .map(getUnitById)
@@ -3436,7 +3503,12 @@ export default function App() {
     return false;
   }
 
-  function hasNotSameDaySameClassConflict(currentClass, currentHour, unit, day = selectedDay) {
+  function hasNotSameDaySameClassConflict(
+    currentClass,
+    currentHour,
+    unit,
+    day = selectedDay,
+  ) {
     const group = getConstraintGroupById(unit.constraintGroupId);
 
     if (!groupHasRule(group, "notSameDaySameClass")) {
@@ -3452,8 +3524,7 @@ export default function App() {
         const otherUnit = getUnitById(unitId);
 
         return (
-          otherUnit &&
-          otherUnit.constraintGroupId === unit.constraintGroupId
+          otherUnit && otherUnit.constraintGroupId === unit.constraintGroupId
         );
       });
 
@@ -3465,7 +3536,12 @@ export default function App() {
     return false;
   }
 
-  function hasNotSameTimeConflict(currentClass, currentHour, unit, day = selectedDay) {
+  function hasNotSameTimeConflict(
+    currentClass,
+    currentHour,
+    unit,
+    day = selectedDay,
+  ) {
     const group = getConstraintGroupById(unit.constraintGroupId);
 
     if (!groupHasRule(group, "notSameTime")) {
@@ -3481,8 +3557,7 @@ export default function App() {
         const otherUnit = getUnitById(unitId);
 
         return (
-          otherUnit &&
-          otherUnit.constraintGroupId === unit.constraintGroupId
+          otherUnit && otherUnit.constraintGroupId === unit.constraintGroupId
         );
       });
 
@@ -3510,7 +3585,7 @@ export default function App() {
     const currentDay = normalizeDay(day);
 
     return teacher.freeDays?.some(
-      (freeDay) => normalizeDay(freeDay) === currentDay
+      (freeDay) => normalizeDay(freeDay) === currentDay,
     );
   }
 
@@ -3519,7 +3594,10 @@ export default function App() {
 
     if (unit.className !== className) return false;
 
-    if (getRemainingUnitHours(unit.id) <= 0 && !options.allowAlreadyScheduledUnit) {
+    if (
+      getRemainingUnitHours(unit.id) <= 0 &&
+      !options.allowAlreadyScheduledUnit
+    ) {
       return false;
     }
 
@@ -3533,7 +3611,6 @@ export default function App() {
 
     return true;
   }
-
 
   function getPurpleHoles(dayToCheck = selectedDay) {
     const holes = [];
@@ -3555,27 +3632,31 @@ export default function App() {
     return holes;
   }
 
-
   function alertNewPurpleHoles(beforeHoles, afterHoles) {
-
     if (!visiblePanels.purpleHoleAlerts) return;
 
     const beforeKeys = new Set(beforeHoles.map(getPurpleHoleKey));
 
     const newHoles = afterHoles.filter(
-      (hole) => !beforeKeys.has(getPurpleHoleKey(hole))
+      (hole) => !beforeKeys.has(getPurpleHoleKey(hole)),
     );
 
     if (newHoles.length === 0) return;
 
     const text = newHoles
-      .map((hole) => `יום ${hole.day}, כיתה ${hole.className}, שעה ${hole.hour}`)
+      .map(
+        (hole) => `יום ${hole.day}, כיתה ${hole.className}, שעה ${hole.hour}`,
+      )
       .join("\n");
 
     alert(`נוצרו חורים סגולים חדשים:\n\n${text}`);
   }
 
-  function isScheduledUnitMovableToSelectedCell(unit, sourceClassName, sourceHour) {
+  function isScheduledUnitMovableToSelectedCell(
+    unit,
+    sourceClassName,
+    sourceHour,
+  ) {
     if (!selectedCell) return false;
 
     if (unit.className !== selectedCell.className) return false;
@@ -3606,11 +3687,7 @@ export default function App() {
     const sameTimeUnit = units.find((unit) => isSameTimeGroup(unit));
 
     if (sameTimeUnit) {
-      removeSameTimeGroupAt(
-        selectedDay,
-        hour,
-        sameTimeUnit.constraintGroupId
-      );
+      removeSameTimeGroupAt(selectedDay, hour, sameTimeUnit.constraintGroupId);
       return;
     }
 
@@ -3633,7 +3710,7 @@ export default function App() {
         newSchedule,
         selectedDay,
         className,
-        hour
+        hour,
       );
 
       const unit = getUnitById(unitId);
@@ -3646,9 +3723,7 @@ export default function App() {
         return newSchedule;
       }
 
-      const nextUnits = append
-        ? [...currentUnits, unitId]
-        : [unitId];
+      const nextUnits = append ? [...currentUnits, unitId] : [unitId];
 
       setCellUnitIds(newSchedule, selectedDay, className, hour, nextUnits);
 
@@ -3674,10 +3749,7 @@ export default function App() {
   }
 
   function isHighlightedGroup(unit) {
-    return (
-      highlightedGroupId &&
-      unit?.constraintGroupId === highlightedGroupId
-    );
+    return highlightedGroupId && unit?.constraintGroupId === highlightedGroupId;
   }
 
   function moveSameTimeGroup(
@@ -3685,14 +3757,14 @@ export default function App() {
     toHour,
     groupId,
     append = false,
-    swap = false
+    swap = false,
   ) {
     if (fromHour === toHour) return;
 
     const groupUnits = getScheduledSameTimeGroupUnitsAt(
       selectedDay,
       fromHour,
-      groupId
+      groupId,
     );
 
     if (groupUnits.length === 0) return;
@@ -3717,35 +3789,32 @@ export default function App() {
           newSchedule,
           selectedDay,
           className,
-          fromHour
+          fromHour,
         );
 
         const toUnits = getCellUnitIdsFromSchedule(
           newSchedule,
           selectedDay,
           className,
-          toHour
+          toHour,
         );
 
         const cleanedFromUnits = fromUnits.filter(
-          (id) => !unitIdsForClass.includes(id)
+          (id) => !unitIdsForClass.includes(id),
         );
 
         if (swap && toUnits.length > 0) {
-          setCellUnitIds(
-            newSchedule,
-            selectedDay,
-            className,
-            fromHour,
-            [...cleanedFromUnits, ...toUnits]
-          );
+          setCellUnitIds(newSchedule, selectedDay, className, fromHour, [
+            ...cleanedFromUnits,
+            ...toUnits,
+          ]);
 
           setCellUnitIds(
             newSchedule,
             selectedDay,
             className,
             toHour,
-            unitIdsForClass
+            unitIdsForClass,
           );
         } else {
           setCellUnitIds(
@@ -3753,11 +3822,14 @@ export default function App() {
             selectedDay,
             className,
             fromHour,
-            cleanedFromUnits
+            cleanedFromUnits,
           );
 
           const nextToUnits = append
-            ? [...toUnits, ...unitIdsForClass.filter((id) => !toUnits.includes(id))]
+            ? [
+                ...toUnits,
+                ...unitIdsForClass.filter((id) => !toUnits.includes(id)),
+              ]
             : unitIdsForClass;
 
           setCellUnitIds(
@@ -3765,7 +3837,7 @@ export default function App() {
             selectedDay,
             className,
             toHour,
-            nextToUnits
+            nextToUnits,
           );
         }
       }
@@ -3800,7 +3872,7 @@ export default function App() {
     if (!groupHasRule(group, "sameTime")) return [unit];
 
     return teachingUnits.filter(
-      (candidate) => candidate.constraintGroupId === unit.constraintGroupId
+      (candidate) => candidate.constraintGroupId === unit.constraintGroupId,
     );
   }
 
@@ -3833,7 +3905,7 @@ export default function App() {
           newSchedule,
           selectedDay,
           className,
-          hour
+          hour,
         );
 
         if (!append) {
@@ -3841,7 +3913,7 @@ export default function App() {
             newSchedule,
             selectedDay,
             hour,
-            currentUnits
+            currentUnits,
           );
         }
 
@@ -3853,13 +3925,7 @@ export default function App() {
           }
         }
 
-        setCellUnitIds(
-          newSchedule,
-          selectedDay,
-          className,
-          hour,
-          baseUnits
-        );
+        setCellUnitIds(newSchedule, selectedDay, className, hour, baseUnits);
       }
 
       return newSchedule;
@@ -3886,18 +3952,12 @@ export default function App() {
           newSchedule,
           day,
           unit.className,
-          hour
+          hour,
         );
 
         const nextUnits = currentUnits.filter((id) => id !== unit.id);
 
-        setCellUnitIds(
-          newSchedule,
-          day,
-          unit.className,
-          hour,
-          nextUnits
-        );
+        setCellUnitIds(newSchedule, day, unit.className, hour, nextUnits);
       }
 
       return newSchedule;
@@ -3955,7 +4015,13 @@ export default function App() {
     return false;
   }
 
-  function moveSingleUnitWithinRow(fromClass, fromHour, toClass, toHour, unitId) {
+  function moveSingleUnitWithinRow(
+    fromClass,
+    fromHour,
+    toClass,
+    toHour,
+    unitId,
+  ) {
     if (fromClass !== toClass) {
       alert("אפשר לגרור רק בתוך אותה שורה / אותה כיתה");
       return;
@@ -3970,14 +4036,14 @@ export default function App() {
         newSchedule,
         selectedDay,
         fromClass,
-        fromHour
+        fromHour,
       );
 
       const targetUnits = getCellUnitIdsFromSchedule(
         newSchedule,
         selectedDay,
         toClass,
-        toHour
+        toHour,
       );
 
       const remainingFromUnits = fromUnits.filter((id) => id !== unitId);
@@ -3985,37 +4051,28 @@ export default function App() {
       if (ctrlPressed && targetUnits.length > 0) {
         const newTargetUnits = targetUnits.filter((id) => id !== unitId);
 
-        setCellUnitIds(
-          newSchedule,
-          selectedDay,
-          fromClass,
-          fromHour,
-          [...remainingFromUnits, ...targetUnits]
-        );
+        setCellUnitIds(newSchedule, selectedDay, fromClass, fromHour, [
+          ...remainingFromUnits,
+          ...targetUnits,
+        ]);
 
-        setCellUnitIds(
-          newSchedule,
-          selectedDay,
-          toClass,
-          toHour,
-          [...newTargetUnits, unitId]
-        );
+        setCellUnitIds(newSchedule, selectedDay, toClass, toHour, [
+          ...newTargetUnits,
+          unitId,
+        ]);
       } else if (shiftPressed) {
         setCellUnitIds(
           newSchedule,
           selectedDay,
           fromClass,
           fromHour,
-          remainingFromUnits
+          remainingFromUnits,
         );
 
-        setCellUnitIds(
-          newSchedule,
-          selectedDay,
-          toClass,
-          toHour,
-          [...targetUnits, unitId]
-        );
+        setCellUnitIds(newSchedule, selectedDay, toClass, toHour, [
+          ...targetUnits,
+          unitId,
+        ]);
       }
 
       return newSchedule;
@@ -4043,7 +4100,7 @@ export default function App() {
       (meeting.teacherIds || []).every((teacherId) => {
         const teacher = getTeacherById(teacherId);
         return !teacher?.freeDays?.includes(day);
-      })
+      }),
     );
   }
 
@@ -4070,14 +4127,14 @@ export default function App() {
         newSchedule,
         selectedDay,
         fromClass,
-        fromHour
+        fromHour,
       );
 
       const targetUnits = getCellUnitIdsFromSchedule(
         newSchedule,
         selectedDay,
         toClass,
-        toHour
+        toHour,
       );
 
       if (ctrlPressed && targetUnits.length > 0) {
@@ -4086,16 +4143,10 @@ export default function App() {
           selectedDay,
           fromClass,
           fromHour,
-          targetUnits
+          targetUnits,
         );
 
-        setCellUnitIds(
-          newSchedule,
-          selectedDay,
-          toClass,
-          toHour,
-          fromUnits
-        );
+        setCellUnitIds(newSchedule, selectedDay, toClass, toHour, fromUnits);
       } else {
         setCellUnitIds(newSchedule, selectedDay, fromClass, fromHour, []);
         setCellUnitIds(newSchedule, selectedDay, toClass, toHour, fromUnits);
@@ -4135,7 +4186,7 @@ export default function App() {
 
       const beforePurpleHoles = getPurpleHolesForDayFromSchedule(
         schedule,
-        selectedDay
+        selectedDay,
       );
 
       requestPurpleHoleCheck();
@@ -4166,20 +4217,18 @@ export default function App() {
     const blockedGroupUnit = draggedUnitIdsForGroupTimeCheck
       .map(getUnitById)
       .find((unit) =>
-        isUnitConstraintGroupBlockedAt(unit, selectedDay, toHour)
+        isUnitConstraintGroupBlockedAt(unit, selectedDay, toHour),
       );
 
     if (blockedGroupUnit) {
       const group = getConstraintGroupById(blockedGroupUnit.constraintGroupId);
-      alert(
-        `לא ניתן לשבץ בזמן זה: קבוצת ${group?.name || "השיבוץ"} חסומה.`
-      );
+      alert(`לא ניתן לשבץ בזמן זה: קבוצת ${group?.name || "השיבוץ"} חסומה.`);
       return;
     }
 
     const beforePurpleHoles = getPurpleHolesForDayFromSchedule(
       schedule,
-      selectedDay
+      selectedDay,
     );
 
     // גרירה מתוך הטבלה
@@ -4192,7 +4241,6 @@ export default function App() {
         .map(getUnitById)
         .find((unit) => unit && isSameTimeGroup(unit));
 
-
       if (sameTimeUnit) {
         requestPurpleHoleCheck();
         moveSameTimeGroup(
@@ -4200,7 +4248,7 @@ export default function App() {
           toHour,
           sameTimeUnit.constraintGroupId,
           shiftPressed,
-          ctrlPressed
+          ctrlPressed,
         );
 
         return;
@@ -4214,7 +4262,7 @@ export default function App() {
           data.fromHour,
           toClass,
           toHour,
-          singleDragUnitId
+          singleDragUnitId,
         );
       } else {
         moveUnitsWithinRow(
@@ -4222,7 +4270,7 @@ export default function App() {
           data.fromHour,
           toClass,
           toHour,
-          data.unitIds || []
+          data.unitIds || [],
         );
       }
 
@@ -4250,7 +4298,7 @@ export default function App() {
         const alreadyInTarget = getCellUnitIds(
           selectedDay,
           candidate.className,
-          toHour
+          toHour,
         ).includes(candidate.id);
 
         if (alreadyInTarget) return false;
@@ -4288,12 +4336,16 @@ export default function App() {
               return `${teacherName} (${candidate.className}) — התא נעול`;
             }
 
-            if (isUnitConstraintGroupBlockedAt(candidate, selectedDay, toHour)) {
+            if (
+              isUnitConstraintGroupBlockedAt(candidate, selectedDay, toHour)
+            ) {
               const group = getConstraintGroupById(candidate.constraintGroupId);
               return `${teacherName} (${candidate.className}) — קבוצת ${group?.name || "השיבוץ"} חסומה בזמן זה`;
             }
 
-            if (isTeacherBlockedHour(candidate.teacherId, selectedDay, toHour)) {
+            if (
+              isTeacherBlockedHour(candidate.teacherId, selectedDay, toHour)
+            ) {
               return `${teacherName} (${candidate.className}) — חסום/ה בשעה זו`;
             }
 
@@ -4313,8 +4365,6 @@ export default function App() {
 
       placeUnitsByClassAtHour(unitsToPlace, toHour, shiftPressed);
 
-
-
       return;
     }
   }
@@ -4323,9 +4373,7 @@ export default function App() {
     const holes = [];
 
     for (const day of days) {
-      holes.push(
-        ...getPurpleHolesForDayFromSchedule(scheduleObject, day)
-      );
+      holes.push(...getPurpleHolesForDayFromSchedule(scheduleObject, day));
     }
 
     return holes;
@@ -4350,12 +4398,11 @@ export default function App() {
         } catch (processedError) {
           console.error("Processed timetable import failed:", processedError);
           throw new Error(
-            `ייבוא הסדין נכשל. הגליונות שנמצאו בקובץ הם: ${result.sheetNames.join(", ")}`
+            `ייבוא הסדין נכשל. הגליונות שנמצאו בקובץ הם: ${result.sheetNames.join(", ")}`,
           );
         }
       }
       //const parsedData = buildDataFromTimetableSheet(result);
-
 
       setImportedExcel(result);
       const normalizedData = ensureDailyHoursForClasses(parsedData);
@@ -4368,7 +4415,7 @@ export default function App() {
       localStorage.removeItem("schoolSchedule");
 
       alert(
-        `הייבוא הצליח!\nנטענו ${parsedData.teachers.length} מורים ו-${parsedData.classes.length} כיתות.`
+        `הייבוא הצליח!\nנטענו ${parsedData.teachers.length} מורים ו-${parsedData.classes.length} כיתות.`,
       );
     } catch (error) {
       console.error(error);
@@ -4391,7 +4438,7 @@ export default function App() {
 
       const scheduledHours = Math.min(
         requiredHours,
-        countScheduledUnitHours(unit.id, schedule)
+        countScheduledUnitHours(unit.id, schedule),
       );
 
       totalHours += requiredHours;
@@ -4430,33 +4477,26 @@ export default function App() {
       ],
     });
 
-    const agentContext =
-      createSchedulingAgentContext({
-        schoolData,
-        schedule,
-        approvedExceptions: [
-          {
-            type: "meetingParticipant",
-            meetingId: "meeting-1785136295118",
-            teacherId: "7",
-          },
-        ],
-        rules: [],
-      });
+    const agentContext = createSchedulingAgentContext({
+      schoolData,
+      schedule,
+      approvedExceptions: [
+        {
+          type: "meetingParticipant",
+          meetingId: "meeting-1785136295118",
+          teacherId: "7",
+        },
+      ],
+      rules: [],
+    });
 
-    console.log(
-      "Scheduling agent context:",
-      agentContext
-    );
+    console.log("Scheduling agent context:", agentContext);
 
     console.group("Scheduling validator report");
 
     console.log("Valid:", report.valid);
     console.log("Statistics:", report.statistics);
-    console.log(
-      "Missing units:",
-      report.missingUnits
-    );
+    console.log("Missing units:", report.missingUnits);
     if (report.errors.length > 0) {
       console.group("Errors");
       report.errors.forEach((error, index) => {
@@ -4479,7 +4519,6 @@ export default function App() {
   }
 
   return (
-
     <DndContext
       onDragStart={(event) => {
         const data = event.active.data.current;
@@ -4520,7 +4559,6 @@ export default function App() {
         setHighlightedGroupId(unit?.constraintGroupId || null);
         setActivePlacementUnitId(unitId || null);
       }}
-
       onDragOver={(event) => {
         const overId = event.over?.id;
 
@@ -4536,7 +4574,6 @@ export default function App() {
           hour: String(hour),
         });
       }}
-
       onDragEnd={(event) => {
         setDragSource(null);
         const data = event.active.data.current;
@@ -4555,7 +4592,6 @@ export default function App() {
         }
         setDragOriginCell(null);
       }}
-
       onDragCancel={() => {
         setDragSource(null);
         setHoveredCell(null);
@@ -4565,8 +4601,6 @@ export default function App() {
         setDragOriginCell(null);
       }}
     >
-
-
       <div
         className={isFocusMode ? "container focus-mode" : "container"}
         style={{
@@ -4646,6 +4680,12 @@ export default function App() {
             >
               ישיבות צוות
             </button>
+            <button
+              className={activeView === "schedulingAgent" ? "active-tab" : ""}
+              onClick={() => setActiveView("schedulingAgent")}
+            >
+              סוכן שיבוץ AI
+            </button>
             {selectedCloudProjectId && (
               <span
                 className={
@@ -4664,7 +4704,6 @@ export default function App() {
         {activeView === "scheduler" && (
           <>
             <div className="top-bar">
-
               <div className="days-bar">
                 {days.map((day) => (
                   <button
@@ -4768,7 +4807,9 @@ export default function App() {
                       <input
                         type="checkbox"
                         checked={showFreeDayTeachers}
-                        onChange={(e) => setShowFreeDayTeachers(e.target.checked)}
+                        onChange={(e) =>
+                          setShowFreeDayTeachers(e.target.checked)
+                        }
                       />
                       הצג מורים ביום חופשי
                     </label>
@@ -4790,7 +4831,11 @@ export default function App() {
                     </label>
                     <div className="view-slider-control">
                       <label>
-                        גובה שורות: {rowHeightOffset > 0 ? `+${rowHeightOffset}` : rowHeightOffset}px
+                        גובה שורות:{" "}
+                        {rowHeightOffset > 0
+                          ? `+${rowHeightOffset}`
+                          : rowHeightOffset}
+                        px
                       </label>
 
                       <input
@@ -4799,7 +4844,9 @@ export default function App() {
                         max="20"
                         step="1"
                         value={rowHeightOffset}
-                        onChange={(e) => setRowHeightOffset(Number(e.target.value))}
+                        onChange={(e) =>
+                          setRowHeightOffset(Number(e.target.value))
+                        }
                       />
                     </div>
                     {selectedLoadUnitId && (
@@ -4812,7 +4859,6 @@ export default function App() {
                     )}
                   </div>
                 )}
-
               </div>
 
               <button
@@ -4823,7 +4869,6 @@ export default function App() {
               >
                 {isFocusMode ? "צא ממסך שיבוץ מלא" : "מסך שיבוץ מלא"}
               </button>
-
             </div>
 
             {visiblePanels.progress && (
@@ -4833,7 +4878,9 @@ export default function App() {
             {visiblePanels.groups && (
               <ConstraintGroupsPanel
                 constraintGroups={constraintGroups}
-                homeroomTeacherColor={schoolData.homeroomTeacherColor || "#c8e6c9"}
+                homeroomTeacherColor={
+                  schoolData.homeroomTeacherColor || "#c8e6c9"
+                }
                 onCreateGroup={() => {
                   setEditingConstraintGroup(null);
                   setShowConstraintGroupDialog(true);
@@ -4869,36 +4916,47 @@ export default function App() {
                     <th>מחסן שעות</th>
                     {visiblePanels.dailyBalance && <th>יתרת יום</th>}
                     <th>כיתה</th>
-                    {visibleHours.map((hour) => (<th
-                      key={hour}
-                      className={
-                        hoveredCell?.hour === String(hour) ? "highlighted-header" : ""
-                      }
-                    >
-                      שעה {hour}
-                    </th>))}
+                    {visibleHours.map((hour) => (
+                      <th
+                        key={hour}
+                        className={
+                          hoveredCell?.hour === String(hour)
+                            ? "highlighted-header"
+                            : ""
+                        }
+                      >
+                        שעה {hour}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
 
                 <tbody>
                   {classes
-                    .filter((className) => shouldShowClassInSelectedDay(className))
+                    .filter((className) =>
+                      shouldShowClassInSelectedDay(className),
+                    )
                     .map((className) => (
                       <tr key={className}>
-
                         <LoadCell className={className}>
                           {teachingUnits
                             .filter((unit) => unit.className === className)
                             .map((unit) => {
                               const teacher = getTeacherById(unit.teacherId);
                               const remaining = getRemainingUnitHours(unit.id);
-                              const isFreeDay = isTeacherFreeDay(unit.teacherId, selectedDay);
+                              const isFreeDay = isTeacherFreeDay(
+                                unit.teacherId,
+                                selectedDay,
+                              );
 
-                              if (!showFreeDayTeachers && isFreeDay) return null;
+                              if (!showFreeDayTeachers && isFreeDay)
+                                return null;
                               //const group = getConstraintGroupById(unit.constraintGroupId);
                               const group = getUnitDisplayGroup(unit);
-                              const teacherHighlight = getTeacherHighlight(teacher);
-                              const selectedCellHint = getSelectedCellUnitHint(unit);
+                              const teacherHighlight =
+                                getTeacherHighlight(teacher);
+                              const selectedCellHint =
+                                getSelectedCellUnitHint(unit);
 
                               return (
                                 <LoadItem
@@ -4926,25 +4984,31 @@ export default function App() {
                                   highlightedGroup={isHighlightedGroup(unit)}
                                 />
                               );
-                            })
-                          }
+                            })}
                         </LoadCell>
 
-                        {visiblePanels.dailyBalance && (() => {
-                          const balanceColor = getDailyBalanceColor(className, selectedDay);
+                        {visiblePanels.dailyBalance &&
+                          (() => {
+                            const balanceColor = getDailyBalanceColor(
+                              className,
+                              selectedDay,
+                            );
 
-                          return (
-                            <td
-                              className="daily-balance-cell"
-                              style={{
-                                backgroundColor: balanceColor,
-                                color: getBalanceTextColor(balanceColor),
-                              }}
-                            >
-                              {getRemainingHoursForClassInDay(className, selectedDay)}
-                            </td>
-                          );
-                        })()}
+                            return (
+                              <td
+                                className="daily-balance-cell"
+                                style={{
+                                  backgroundColor: balanceColor,
+                                  color: getBalanceTextColor(balanceColor),
+                                }}
+                              >
+                                {getRemainingHoursForClassInDay(
+                                  className,
+                                  selectedDay,
+                                )}
+                              </td>
+                            );
+                          })()}
 
                         <td
                           className={
@@ -4957,8 +5021,14 @@ export default function App() {
                         </td>
 
                         {visibleHours.map((hour) => {
-                          const unitIds = getCellUnitIds(selectedDay, className, hour);
-                          const units = unitIds.map(getUnitById).filter(Boolean);
+                          const unitIds = getCellUnitIds(
+                            selectedDay,
+                            className,
+                            hour,
+                          );
+                          const units = unitIds
+                            .map(getUnitById)
+                            .filter(Boolean);
                           const selectedCellHintsByUnit = {};
 
                           const teachersByUnit = {};
@@ -4967,26 +5037,39 @@ export default function App() {
 
                           for (const unit of units) {
                             const teacher = getTeacherById(unit.teacherId);
-                            const selectedCellHint = getSelectedCellUnitHint(unit, {
-                              allowAlreadyScheduledUnit: true,
-                              sourceClassName: className,
-                              sourceHour: hour,
-                            });
+                            const selectedCellHint = getSelectedCellUnitHint(
+                              unit,
+                              {
+                                allowAlreadyScheduledUnit: true,
+                                sourceClassName: className,
+                                sourceHour: hour,
+                              },
+                            );
 
                             if (selectedCellHint) {
-                              selectedCellHintsByUnit[unit.id] = selectedCellHint;
+                              selectedCellHintsByUnit[unit.id] =
+                                selectedCellHint;
                             }
                             teachersByUnit[unit.id] = teacher;
                             groupsByUnit[unit.id] = getUnitDisplayGroup(unit);
-                            teacherHighlightsByUnit[unit.id] = getTeacherHighlight(teacher);
+                            teacherHighlightsByUnit[unit.id] =
+                              getTeacherHighlight(teacher);
                           }
 
                           const conflictingTeacherIds = units
                             .filter(
                               (unit) =>
-                                hasTeacherConflict(className, hour, unit.teacherId) ||
-                                hasNotSameDaySameClassConflict(className, hour, unit) ||
-                                hasNotSameTimeConflict(className, hour, unit)
+                                hasTeacherConflict(
+                                  className,
+                                  hour,
+                                  unit.teacherId,
+                                ) ||
+                                hasNotSameDaySameClassConflict(
+                                  className,
+                                  hour,
+                                  unit,
+                                ) ||
+                                hasNotSameTimeConflict(className, hour, unit),
                             )
                             .map((unit) => unit.teacherId);
 
@@ -5003,30 +5086,48 @@ export default function App() {
                               .filter(
                                 (unit) =>
                                   highlightedGroupId &&
-                                  unit.constraintGroupId === highlightedGroupId
+                                  unit.constraintGroupId === highlightedGroupId,
                               )
-                              .map((unit) => unit.id)
+                              .map((unit) => unit.id),
                           );
 
-                          const blocked = isBlockedCell(className, selectedDay, hour);
-                          const placementHint = getPlacementHint(className, selectedDay, hour);
-                          const purpleHole = isPurpleHoleCell(selectedDay, className, hour);
+                          const blocked = isBlockedCell(
+                            className,
+                            selectedDay,
+                            hour,
+                          );
+                          const placementHint = getPlacementHint(
+                            className,
+                            selectedDay,
+                            hour,
+                          );
+                          const purpleHole = isPurpleHoleCell(
+                            selectedDay,
+                            className,
+                            hour,
+                          );
                           const difficultyCount = visiblePanels.difficultyHints
                             ? getDifficultyCount(className, selectedDay, hour)
                             : null;
                           const activeTeacherHere = cellHasActiveTeacher(
                             className,
                             selectedDay,
-                            hour
+                            hour,
                           );
-                          const locked = isCellLocked(selectedDay, className, hour);
+                          const locked = isCellLocked(
+                            selectedDay,
+                            className,
+                            hour,
+                          );
 
                           return (
                             <DroppableCell
                               purpleHole={purpleHole}
                               locked={locked}
                               selectedCellHintsByUnit={selectedCellHintsByUnit}
-                              onToggleLock={() => toggleCellLock(selectedDay, className, hour)}
+                              onToggleLock={() =>
+                                toggleCellLock(selectedDay, className, hour)
+                              }
                               key={hour}
                               className={className}
                               hour={hour}
@@ -5043,7 +5144,9 @@ export default function App() {
                               activeTeacherHere={activeTeacherHere}
                               teacherHighlightsByUnit={teacherHighlightsByUnit}
                               difficultyCount={difficultyCount}
-                              difficultyLevel={getDifficultyLevel(difficultyCount)}
+                              difficultyLevel={getDifficultyLevel(
+                                difficultyCount,
+                              )}
                               onClick={() => {
                                 setSelectedCell({
                                   className,
@@ -5055,7 +5158,9 @@ export default function App() {
 
                                 const firstUnit = units[0];
 
-                                setHighlightedGroupId(firstUnit?.constraintGroupId || null);
+                                setHighlightedGroupId(
+                                  firstUnit?.constraintGroupId || null,
+                                );
                               }}
                             />
                           );
@@ -5067,7 +5172,6 @@ export default function App() {
             </div>
           </>
         )}
-
 
         {activeView === "shahaf" && (
           <ShahafView
@@ -5164,11 +5268,7 @@ export default function App() {
         )}
 
         {activeView === "freeDays" && (
-          <FreeDaysView
-            teachers={teachers}
-            classes={classes}
-            days={days}
-          />
+          <FreeDaysView teachers={teachers} classes={classes} days={days} />
         )}
 
         {activeView === "groupConstraints" && (
@@ -5179,6 +5279,19 @@ export default function App() {
             isGroupBlockedAt={isConstraintGroupBlockedAt}
             onToggleSlot={toggleConstraintGroupBlockedSlot}
             onSetAllSlots={setAllConstraintGroupSlotsBlocked}
+          />
+        )}
+
+        {activeView === "schedulingAgent" && (
+          <SchedulingAgentView
+            agentContext={schedulingAgentContext}
+            validationReport={schedulingAgentValidationReport}
+            rules={schedulingAgentRules}
+            onRulesChange={setSchedulingAgentRules}
+            approvedExceptions={schedulingAgentApprovedExceptions}
+            onApprovedExceptionsChange={setSchedulingAgentApprovedExceptions}
+            messages={schedulingAgentMessages}
+            onMessagesChange={setSchedulingAgentMessages}
           />
         )}
 
@@ -5209,15 +5322,13 @@ export default function App() {
             setShowHelpDialog={setShowHelpDialog}
           />
         )}
+
         {showHelpDialog && (
           <div
             className="modal-backdrop"
             onClick={() => setShowHelpDialog(false)}
           >
-            <div
-              className="help-dialog"
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div className="help-dialog" onClick={(e) => e.stopPropagation()}>
               <div className="help-header">
                 <h2>עזרה</h2>
 
@@ -5241,24 +5352,15 @@ export default function App() {
             className="dialog-overlay"
             onClick={() => setShowHelpDialog(false)}
           >
-            <div
-              className="help-dialog"
-              onClick={(e) => e.stopPropagation()}
-            >
+            <div className="help-dialog" onClick={(e) => e.stopPropagation()}>
               <div className="help-header">
                 <h2>עזרה</h2>
 
-                <button
-                  onClick={() => setShowHelpDialog(false)}
-                >
-                  ✖
-                </button>
+                <button onClick={() => setShowHelpDialog(false)}>✖</button>
               </div>
 
               <div className="help-content">
-                <ReactMarkdown>
-                  {HELP_TEXT}
-                </ReactMarkdown>
+                <ReactMarkdown>{HELP_TEXT}</ReactMarkdown>
               </div>
             </div>
           </div>
@@ -5282,7 +5384,8 @@ export default function App() {
                   יחידה:{" "}
                   <strong>
                     {getTeacherById(groupDialogUnit.teacherId)?.name}
-                    {groupDialogUnit.subject && groupDialogUnit.subject !== "רגיל"
+                    {groupDialogUnit.subject &&
+                    groupDialogUnit.subject !== "רגיל"
                       ? ` / ${groupDialogUnit.subject}`
                       : ""}
                   </strong>
@@ -5305,7 +5408,11 @@ export default function App() {
                   <p className="current-assignment-group">
                     קבוצה נוכחית:{" "}
                     <strong>
-                      {getConstraintGroupById(groupDialogUnit.constraintGroupId)?.name}
+                      {
+                        getConstraintGroupById(
+                          groupDialogUnit.constraintGroupId,
+                        )?.name
+                      }
                     </strong>
                   </p>
                 )}
@@ -5327,7 +5434,7 @@ export default function App() {
                     splitUnitAndAssignGroup(
                       groupDialogUnit.id,
                       null,
-                      groupDialogHours
+                      groupDialogHours,
                     )
                   }
                 >
@@ -5338,7 +5445,7 @@ export default function App() {
                   .filter((group) =>
                     (group.name || "")
                       .toLocaleLowerCase("he")
-                      .includes(groupSearchText.trim().toLocaleLowerCase("he"))
+                      .includes(groupSearchText.trim().toLocaleLowerCase("he")),
                   )
                   .map((group) => (
                     <button
@@ -5348,7 +5455,7 @@ export default function App() {
                         splitUnitAndAssignGroup(
                           groupDialogUnit.id,
                           group.id,
-                          groupDialogHours
+                          groupDialogHours,
                         )
                       }
                     >
@@ -5361,7 +5468,8 @@ export default function App() {
                         .map((rule) => {
                           if (rule === "sameTime") return "חייב באותו טור";
                           if (rule === "notSameTime") return "אסור באותו טור";
-                          if (rule === "notSameDaySameClass") return "אסור באותה שורה";
+                          if (rule === "notSameDaySameClass")
+                            return "אסור באותה שורה";
                           return rule;
                         })
                         .join(" + ")}
@@ -5372,9 +5480,11 @@ export default function App() {
                   constraintGroups.filter((group) =>
                     (group.name || "")
                       .toLocaleLowerCase("he")
-                      .includes(groupSearchText.trim().toLocaleLowerCase("he"))
+                      .includes(groupSearchText.trim().toLocaleLowerCase("he")),
                   ).length === 0 && (
-                    <p className="empty-group-search">לא נמצאו קבוצות מתאימות</p>
+                    <p className="empty-group-search">
+                      לא נמצאו קבוצות מתאימות
+                    </p>
                   )}
               </div>
 
@@ -5404,8 +5514,6 @@ export default function App() {
           />
         )}
       </div>
-
-
-    </DndContext >
+    </DndContext>
   );
 }

@@ -1,5 +1,12 @@
 // src/scheduling/agentContext.js
 
+/**
+ * יוצר snapshot של מצב המערכת לצורך עבודה של סוכן השיבוץ.
+ *
+ * חשוב:
+ * האובייקט הזה אינו משנה את ה-schedule הפעיל.
+ * בהמשך הסוכן יעבוד על candidateSchedule נפרד.
+ */
 export function createSchedulingAgentContext({
   schoolData,
   schedule,
@@ -9,24 +16,57 @@ export function createSchedulingAgentContext({
   return {
     createdAt: new Date().toISOString(),
 
+    /**
+     * נתוני בית הספר:
+     * מורים, כיתות, יחידות הוראה,
+     * קבוצות אילוץ, ישיבות וכו'.
+     */
     schoolData,
 
-    // עותק של המערכת שעליה הסוכן מסתכל כרגע
+    /**
+     * המערכת הקיימת שעליה הסוכן מסתכל.
+     *
+     * בשלב הזה אנחנו רק קוראים אותה.
+     */
     baseSchedule: schedule,
 
-    // בשלב הזה עדיין אין הצעה חדשה
+    /**
+     * כאן תהיה בעתיד הצעת השיבוץ של הסוכן.
+     *
+     * בכוונה לא משתמשים ב-schedule הפעיל.
+     */
     candidateSchedule: null,
 
-    // חריגים שאושרו על ידי המשתמש
+    /**
+     * חריגים שהמשתמש אישר במהלך השיחה.
+     *
+     * לדוגמה:
+     * מורה שלא חייב להשתתף בישיבה מסוימת.
+     */
     approvedExceptions: [
       ...approvedExceptions,
     ],
 
-    // חוקי-על שהמשתמש יגדיר בהמשך
+    /**
+     * חוקי-העל שהמשתמש ייתן בשפה טבעית.
+     *
+     * בהמשך הסוכן ישמור כאן גם את
+     * הפרשנות המובנית שלהם.
+     */
     rules: [
       ...rules,
     ],
 
+    /**
+     * מצב תהליך הסוכן.
+     *
+     * בהמשך יהיו מצבים נוספים:
+     * validating
+     * waitingForUser
+     * searching
+     * candidateReady
+     * failed
+     */
     status: "ready",
   };
 }
