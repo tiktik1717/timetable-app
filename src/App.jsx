@@ -4125,7 +4125,6 @@ export default function App() {
     if (isTeacherFreeDay(unit.teacherId, day)) return "המורה נמצא ביום חופשי";
     if (isTeacherBlockedHour(unit.teacherId, day, hour)) return "המורה חסום ביום ובשעה שנבחרו";
     if (isUnitConstraintGroupBlockedAt(unit, day, hour)) return "קבוצת השיבוץ חסומה ביום ובשעה שנבחרו";
-    if (isTeacherBusyAtInSchedule(unit.teacherId, day, hour, scheduleObject)) return "המורה כבר משובץ בשעה זו";
     if (violatesConstraintRulesInSchedule(unit, scheduleObject, day, className, hour))
       return "השיבוץ מפר את חוקי קבוצת השיבוץ";
     return null;
