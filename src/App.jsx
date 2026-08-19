@@ -144,6 +144,8 @@ export default function App() {
   const [draggedClassName, setDraggedClassName] = useState(null);
   const [activePlacementUnitId, setActivePlacementUnitId] = useState(null);
   const [dragOriginCell, setDragOriginCell] = useState(null);
+  const [columnSwapMode, setColumnSwapMode] = useState(false);
+  const [columnSwapFirstHour, setColumnSwapFirstHour] = useState(null);
   const pendingPurpleHoleCheckRef = useRef(null);
   const [authInitialized, setAuthInitialized] = useState(false);
   const [rowHeightOffset, setRowHeightOffset] = useState(() => {
@@ -2292,8 +2294,13 @@ export default function App() {
       return;
     }
 
-    if (!canTeacherWorkAt(unit.teacherId, selectedDay, hour)) {
+    if (isTeacherFreeDay(unit.teacherId, selectedDay)) {
       alert("לא ניתן לשבץ מורה ביום החופשי שלו");
+      return;
+    }
+
+    if (isTeacherBlockedHour(unit.teacherId, selectedDay, hour)) {
+      alert("לא ניתן לשבץ את המורה בשעה זו: המורה חסום ביום ובשעה שנבחרו");
       return;
     }
 
@@ -2550,9 +2557,8 @@ export default function App() {
       return null;
     }
 
-    if (getRemainingUnitHours(unit.id) <= 0 && !allowAlreadyScheduledUnit) {
-      return null;
-    }
+    const isExhausted =
+      getRemainingUnitHours(unit.id) <= 0 && !allowAlreadyScheduledUnit;
 
     if (
       isBlockedCell(selectedCell.className, selectedDay, selectedCell.hour) ||
@@ -2589,7 +2595,7 @@ export default function App() {
       return "notSameTimeConflict";
     }
 
-    return "available";
+    return isExhausted ? "availableExhausted" : "available";
   }
 
   function isUnitAvailableForSelectedCell(unit) {
@@ -4111,6 +4117,143 @@ export default function App() {
     return true;
   }
 
+  function getPlacementProblemForUnitInSchedule(unit, scheduleObject, day, className, hour) {
+    if (!unit) return "יחידת השיבוץ אינה קיימת";
+    if (unit.className !== className) return "ניתן להזיז שיעור רק בתוך אותה כיתה";
+    if (isBlockedCell(className, day, hour)) return "השעה אינה קיימת בכיתה זו ביום זה";
+    if (isCellLocked(day, className, hour)) return "תא היעד נעול";
+    if (isTeacherFreeDay(unit.teacherId, day)) return "המורה נמצא ביום חופשי";
+    if (isTeacherBlockedHour(unit.teacherId, day, hour)) return "המורה חסום ביום ובשעה שנבחרו";
+    if (isUnitConstraintGroupBlockedAt(unit, day, hour)) return "קבוצת השיבוץ חסומה ביום ובשעה שנבחרו";
+    if (isTeacherBusyAtInSchedule(unit.teacherId, day, hour, scheduleObject)) return "המורה כבר משובץ בשעה זו";
+    if (violatesConstraintRulesInSchedule(unit, scheduleObject, day, className, hour))
+      return "השיבוץ מפר את חוקי קבוצת השיבוץ";
+    return null;
+  }
+
+  function tryPlaceBundleInSchedule(scheduleObject, records) {
+    const trial = structuredClone(scheduleObject);
+    for (const record of records) {
+      const unit = getUnitById(record.unitId);
+      const problem = getPlacementProblemForUnitInSchedule(
+        unit, trial, selectedDay, record.className, record.hour,
+      );
+      if (problem) return { ok: false, problem };
+      const current = getCellUnitIdsFromSchedule(
+        trial, selectedDay, record.className, record.hour,
+      );
+      setCellUnitIds(trial, selectedDay, record.className, record.hour, [
+        ...current, record.unitId,
+      ]);
+    }
+    return { ok: true, schedule: trial };
+  }
+
+  function validateMoveOrSwap(fromClass, fromHour, toClass, toHour, movingUnitIds, swapUnitIds = []) {
+    const base = structuredClone(schedule);
+    const allMovingIds = new Set([...(movingUnitIds || []), ...(swapUnitIds || [])]);
+
+    for (const className of classes) {
+      for (const hour of [fromHour, toHour]) {
+        const ids = getCellUnitIdsFromSchedule(base, selectedDay, className, hour);
+        const filtered = ids.filter((id) => !allMovingIds.has(id));
+        if (filtered.length !== ids.length) {
+          setCellUnitIds(base, selectedDay, className, hour, filtered);
+        }
+      }
+    }
+
+    let result = tryPlaceBundleInSchedule(
+      base,
+      (movingUnitIds || []).map((unitId) => ({ unitId, className: toClass, hour: String(toHour) })),
+    );
+    if (!result.ok) return result;
+
+    if (swapUnitIds?.length) {
+      result = tryPlaceBundleInSchedule(
+        result.schedule,
+        swapUnitIds.map((unitId) => ({ unitId, className: fromClass, hour: String(fromHour) })),
+      );
+      if (!result.ok) return result;
+    }
+    return { ok: true };
+  }
+
+  function swapScheduleColumns(firstHour, secondHour) {
+    const fromHour = String(firstHour);
+    const toHour = String(secondHour);
+    if (fromHour === toHour) return;
+
+    const hasLocked = classes.some(
+      (className) =>
+        isCellLocked(selectedDay, className, fromHour) ||
+        isCellLocked(selectedDay, className, toHour),
+    );
+    if (hasLocked) {
+      alert("לא ניתן להחליף טורים כאשר אחד התאים בשני הטורים נעול");
+      return;
+    }
+
+    const next = structuredClone(schedule);
+    const movingRecords = [];
+
+    for (const className of classes) {
+      const fromIds = getCellUnitIdsFromSchedule(schedule, selectedDay, className, fromHour);
+      const toIds = getCellUnitIdsFromSchedule(schedule, selectedDay, className, toHour);
+      setCellUnitIds(next, selectedDay, className, fromHour, []);
+      setCellUnitIds(next, selectedDay, className, toHour, []);
+      for (const unitId of fromIds) movingRecords.push({ unitId, className, hour: toHour });
+      for (const unitId of toIds) movingRecords.push({ unitId, className, hour: fromHour });
+    }
+
+    const bundles = new Map();
+    for (const record of movingRecords) {
+      const unit = getUnitById(record.unitId);
+      const key =
+        unit && isSameTimeGroup(unit)
+          ? `group:${unit.constraintGroupId}:${record.hour}`
+          : `unit:${record.unitId}`;
+      if (!bundles.has(key)) bundles.set(key, []);
+      bundles.get(key).push(record);
+    }
+
+    let working = next;
+    let returnedUnits = 0;
+    let movedUnits = 0;
+
+    for (const records of bundles.values()) {
+      const result = tryPlaceBundleInSchedule(working, records);
+      if (result.ok) {
+        working = result.schedule;
+        movedUnits += records.length;
+      } else {
+        returnedUnits += records.length;
+      }
+    }
+
+    requestPurpleHoleCheck();
+    updateScheduleWithHistory(() => working);
+    setSelectedCell(null);
+    setColumnSwapFirstHour(null);
+
+    const suffix = returnedUnits > 0
+      ? `\n${returnedUnits} יחידות שלא יכלו לעבור באופן חוקי הוחזרו למחסן השעות.`
+      : "";
+    alert(`הוחלפו הטורים שעה ${firstHour} ושעה ${secondHour}.\n${movedUnits} יחידות הועברו בהצלחה.${suffix}`);
+  }
+
+  function handleColumnHeaderClick(hour) {
+    if (!columnSwapMode) return;
+    if (columnSwapFirstHour == null) {
+      setColumnSwapFirstHour(Number(hour));
+      return;
+    }
+    const first = columnSwapFirstHour;
+    setColumnSwapMode(false);
+    setColumnSwapFirstHour(null);
+    swapScheduleColumns(first, Number(hour));
+  }
+
   function removeTeacherFromCell(className, hour) {
     if (isCellLocked(selectedDay, className, hour)) {
       alert("לא ניתן למחוק תא נעול");
@@ -4676,6 +4819,63 @@ export default function App() {
         .map(getUnitById)
         .find((unit) => unit && isSameTimeGroup(unit));
 
+      const targetUnitIds = getCellUnitIds(selectedDay, toClass, toHour);
+
+      if (!sameTimeUnit) {
+        const validation = validateMoveOrSwap(
+          data.fromClass,
+          data.fromHour,
+          toClass,
+          toHour,
+          draggedUnitIds,
+          ctrlPressed ? targetUnitIds : [],
+        );
+        if (!validation.ok) {
+          alert(`לא ניתן לבצע את ההעברה: ${validation.problem}`);
+          return;
+        }
+      } else {
+        const groupUnits = getScheduledSameTimeGroupUnitsAt(
+          selectedDay,
+          data.fromHour,
+          sameTimeUnit.constraintGroupId,
+        );
+        const base = structuredClone(schedule);
+        const groupIds = new Set(groupUnits.map((u) => u.id));
+
+        for (const className of classes) {
+          const ids = getCellUnitIdsFromSchedule(
+            base,
+            selectedDay,
+            className,
+            data.fromHour,
+          );
+          const filtered = ids.filter((id) => !groupIds.has(id));
+          if (filtered.length !== ids.length) {
+            setCellUnitIds(
+              base,
+              selectedDay,
+              className,
+              data.fromHour,
+              filtered,
+            );
+          }
+        }
+
+        const validation = tryPlaceBundleInSchedule(
+          base,
+          groupUnits.map((u) => ({
+            unitId: u.id,
+            className: u.className,
+            hour: String(toHour),
+          })),
+        );
+        if (!validation.ok) {
+          alert(`לא ניתן להזיז את קבוצת השיבוץ: ${validation.problem}`);
+          return;
+        }
+      }
+
       if (sameTimeUnit) {
         requestPurpleHoleCheck();
         moveSameTimeGroup(
@@ -5174,6 +5374,21 @@ export default function App() {
                 בצע שוב
               </button>
 
+              <button
+                className={`action-button ${columnSwapMode ? "column-swap-active" : ""}`}
+                onClick={() => {
+                  setColumnSwapMode((prev) => !prev);
+                  setColumnSwapFirstHour(null);
+                }}
+                title="לחץ ואז בחר שתי כותרות של שעות כדי להחליף את שני הטורים"
+              >
+                {columnSwapMode
+                  ? columnSwapFirstHour == null
+                    ? "בחר טור ראשון"
+                    : `שעה ${columnSwapFirstHour} נבחרה — בחר טור שני`
+                  : "החלפת טורים"}
+              </button>
+
               <div className="panels-menu-wrapper" ref={panelsMenuRef}>
                 <button
                   className="action-button"
@@ -5343,11 +5558,13 @@ export default function App() {
                     {visibleHours.map((hour) => (
                       <th
                         key={hour}
-                        className={
-                          hoveredCell?.hour === String(hour)
-                            ? "highlighted-header"
-                            : ""
-                        }
+                        onClick={() => handleColumnHeaderClick(hour)}
+                        className={[
+                          hoveredCell?.hour === String(hour) ? "highlighted-header" : "",
+                          columnSwapMode ? "column-swap-header" : "",
+                          columnSwapFirstHour === Number(hour) ? "column-swap-selected-header" : "",
+                        ].join(" ")}
+                        title={columnSwapMode ? "בחר טור להחלפה" : undefined}
                       >
                         שעה {hour}
                       </th>

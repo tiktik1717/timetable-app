@@ -90,6 +90,9 @@ export default function LoadItem({
           teacherHighlight ? "teacher-search-highlight" : "",
           selectedLoadUnitId === unit.id ? "selected-load-item" : "",
           selectedCellHint === "available" ? "available-for-selected-cell" : "",
+          selectedCellHint === "availableExhausted"
+            ? "available-for-selected-cell exhausted-available-for-selected-cell"
+            : "",
           selectedCellHint === "notSameTimeConflict"
             ? "not-same-time-candidate"
             : "",

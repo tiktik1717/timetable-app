@@ -1951,3 +1951,27 @@ body {
   margin-top: 8px;
   font-weight: bold;
 }
+
+/* 19-08-2026 feature/fix bundle */
+td.selected-cell,
+td.selected-cell.active-teacher-cell {
+  outline: 3px solid #ff9800 !important;
+  outline-offset: -3px !important;
+}
+.exhausted-available-for-selected-cell {
+  box-shadow:
+    inset 0 0 0 3px rgba(0, 200, 83, 0.38),
+    0 0 0 2px rgba(0, 200, 83, 0.10) !important;
+}
+.column-swap-active {
+  background: #fff3e0 !important;
+  border-color: #ff9800 !important;
+}
+.column-swap-header {
+  cursor: pointer;
+  box-shadow: inset 0 -3px 0 rgba(255, 152, 0, 0.35);
+}
+.column-swap-selected-header {
+  background: #ffe0b2 !important;
+  box-shadow: inset 0 0 0 3px #ff9800 !important;
+}
