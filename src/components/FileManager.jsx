@@ -1,3 +1,4 @@
+import { useState } from "react";
 import AuthPanel from "./AuthPanel";
 
 export default function FileManager({
@@ -24,7 +25,17 @@ export default function FileManager({
     hasUnsavedCloudChanges,
     lastCloudSavedAt,
     setShowHelpDialog,
+    copyConstraintGroupsFromCloudProject,
 }) {
+
+    const [showCopyGroupsDialog, setShowCopyGroupsDialog] =
+        useState(false);
+
+    const [
+        sourceProjectIdForGroups,
+        setSourceProjectIdForGroups,
+    ] = useState("");
+
     function formatDate(value) {
         if (!value) return "";
 
@@ -82,6 +93,17 @@ export default function FileManager({
                     </button>
 
                     <button
+                        className="file-action-button"
+                        onClick={() => {
+                            setSourceProjectIdForGroups("");
+                            setShowCopyGroupsDialog(true);
+                        }}
+                        disabled={!user || cloudProjects.length === 0}
+                    >
+                        העתק קבוצות שיבוץ מפרויקט אחר
+                    </button>
+
+                    <button
                         className="file-action-button danger-file-button"
                         onClick={deleteSelectedCloudProject}
                         disabled={!user || !selectedCloudProjectId}
@@ -89,6 +111,88 @@ export default function FileManager({
                         מחק מהענן
                     </button>
                 </div>
+                {showCopyGroupsDialog && (
+                    <div className="modal-overlay">
+                        <div className="modal-dialog">
+                            <h3>העתקת קבוצות שיבוץ</h3>
+
+                            <p>
+                                בחר את הפרויקט שממנו תרצה להעתיק את
+                                רשימת קבוצות השיבוץ.
+                            </p>
+
+                            <select
+                                value={sourceProjectIdForGroups}
+                                onChange={(e) =>
+                                    setSourceProjectIdForGroups(
+                                        e.target.value
+                                    )
+                                }
+                            >
+                                <option value="">
+                                    בחר פרויקט מקור
+                                </option>
+
+                                {cloudProjects
+                                    .filter(
+                                        (project) =>
+                                            project.id !==
+                                            selectedCloudProjectId
+                                    )
+                                    .map((project) => (
+                                        <option
+                                            key={project.id}
+                                            value={project.id}
+                                        >
+                                            {project.name}
+                                        </option>
+                                    ))}
+                            </select>
+
+                            <div className="modal-actions">
+                                <button
+                                    type="button"
+                                    className="file-action-button"
+                                    onClick={async () => {
+                                        if (
+                                            !sourceProjectIdForGroups
+                                        ) {
+                                            alert(
+                                                "יש לבחור פרויקט מקור."
+                                            );
+                                            return;
+                                        }
+
+                                        const success =
+                                            await copyConstraintGroupsFromCloudProject(
+                                                sourceProjectIdForGroups
+                                            );
+
+                                        if (success) {
+                                            setShowCopyGroupsDialog(false);
+                                            setSourceProjectIdForGroups(
+                                                ""
+                                            );
+                                        }
+                                    }}
+                                >
+                                    העתק קבוצות
+                                </button>
+
+                                <button
+                                    type="button"
+                                    className="file-action-button"
+                                    onClick={() => {
+                                        setShowCopyGroupsDialog(false);
+                                        setSourceProjectIdForGroups("");
+                                    }}
+                                >
+                                    ביטול
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
             <div className="file-actions">
                 <button className="file-action-button" onClick={saveProjectToFile}>

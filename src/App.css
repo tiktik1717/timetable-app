@@ -103,7 +103,7 @@ th {
   white-space: nowrap;
 }
 
-.load-cell > div {
+.load-cell>div {
   display: inline-flex;
   margin: 2px;
 }
@@ -1268,13 +1268,11 @@ body {
 }
 
 .difficulty-cell {
-  background-image: repeating-linear-gradient(
-    45deg,
-    rgba(255, 255, 255, 0.35) 0,
-    rgba(255, 255, 255, 0.35) 5px,
-    transparent 5px,
-    transparent 10px
-  ) !important;
+  background-image: repeating-linear-gradient(45deg,
+      rgba(255, 255, 255, 0.35) 0,
+      rgba(255, 255, 255, 0.35) 5px,
+      transparent 5px,
+      transparent 10px) !important;
   font-weight: 800;
 }
 
@@ -1480,6 +1478,7 @@ body {
   background: #fff8e1;
   font-weight: bold;
 }
+
 /* Group time constraints */
 .group-constraints-view {
   padding: 16px;
@@ -1887,4 +1886,68 @@ body {
   margin: 10px 0;
   font-size: 0.9rem;
   opacity: 0.7;
+}
+
+.scheduling-agent-action {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.scheduling-agent-action button {
+  margin-top: 8px;
+}
+
+.scheduling-agent-action-approved {
+  margin-top: 8px;
+  font-weight: bold;
+}
+
+.scheduling-agent-list {
+  margin: 12px 0 0;
+  padding-right: 20px;
+}
+
+.scheduling-agent-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.scheduling-agent-list-content {
+  flex: 1;
+}
+
+.scheduling-agent-list-content small {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.7;
+}
+
+.scheduling-agent-delete-button {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.scheduling-agent-rule-check {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.scheduling-agent-rule-check ul {
+  margin: 6px 0 0;
+  padding-right: 20px;
+}
+
+.scheduling-agent-action-pending-validation {
+  margin-top: 8px;
+  font-weight: bold;
 }

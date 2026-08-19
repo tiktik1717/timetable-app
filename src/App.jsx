@@ -8,7 +8,12 @@ import {
 } from "./services/excelImport";
 
 import "./App.css";
-
+import {
+  createAgentWorkspace,
+  tryWorkspaceMove,
+  resetAgentWorkspace,
+} from "./scheduling/agentWorkspace";
+import { simulateScheduleMove } from "./scheduling/scheduleSimulation";
 import SchedulingAgentView from "./components/SchedulingAgentView";
 import DroppableCell from "./components/DroppableCell";
 import LoadItem from "./components/LoadItem";
@@ -48,6 +53,20 @@ import FreeDaysView from "./components/FreeDaysView";
 import SchedulingProgressPanel from "./components/SchedulingProgressPanel";
 
 const SCHEDULING_AGENT_STORAGE_KEY = "scheduling-agent-workspace-v1";
+
+function normalizeTeacherHighlights(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    return createDefaultTeacherHighlights();
+  }
+
+  return value.map((highlight, index) => ({
+    query: typeof highlight?.query === "string" ? highlight.query : "",
+    color:
+      typeof highlight?.color === "string" && highlight.color
+        ? highlight.color
+        : createDefaultTeacherHighlights()[index]?.color || "#1976d2",
+  }));
+}
 
 export default function App() {
   const [selectedDay, setSelectedDay] = useState("א");
@@ -249,6 +268,29 @@ export default function App() {
     }
   });
 
+  const [
+    schedulingAgentWorkspace,
+    setSchedulingAgentWorkspace,
+  ] = useState(null);
+
+  function startSchedulingAgentWorkspace() {
+    const workspace =
+      createAgentWorkspace(schedule);
+
+    setSchedulingAgentWorkspace(workspace);
+
+    console.log(
+      "AGENT WORKSPACE STARTED:",
+      workspace
+    );
+
+    return workspace;
+  }
+
+  function clearSchedulingAgentWorkspace() {
+    setSchedulingAgentWorkspace(null);
+  }
+
   useEffect(() => {
     try {
       const workspace = {
@@ -376,7 +418,7 @@ export default function App() {
 
     if (saved) {
       try {
-        return JSON.parse(saved);
+        return normalizeTeacherHighlights(JSON.parse(saved));
       } catch {
         return createDefaultTeacherHighlights();
       }
@@ -451,6 +493,39 @@ export default function App() {
     meetings = [],
     dailyHoursByClass = {},
   } = schoolData;
+
+  function getAllHourNumbers(scheduleObject = schedule) {
+    const hourNumbers = new Set();
+
+    for (const hour of hours || []) {
+      const numericHour = Number(hour);
+      if (Number.isFinite(numericHour) && numericHour > 0) {
+        hourNumbers.add(numericHour);
+      }
+    }
+
+    for (const classDays of Object.values(dailyHoursByClass || {})) {
+      for (const configuredHours of Object.values(classDays || {})) {
+        const maxHour = Number(configuredHours) || 0;
+        for (let hour = 1; hour <= maxHour; hour++) {
+          hourNumbers.add(hour);
+        }
+      }
+    }
+
+    for (const daySchedule of Object.values(scheduleObject || {})) {
+      for (const classSchedule of Object.values(daySchedule || {})) {
+        for (const hour of Object.keys(classSchedule || {})) {
+          const numericHour = Number(hour);
+          if (Number.isFinite(numericHour) && numericHour > 0) {
+            hourNumbers.add(numericHour);
+          }
+        }
+      }
+    }
+
+    return [...hourNumbers].sort((a, b) => a - b);
+  }
 
   const [selectedClassForShahaf, setSelectedClassForShahaf] = useState(
     classes[0] || "",
@@ -630,6 +705,33 @@ export default function App() {
     };
   }
 
+  useEffect(() => {
+    setSchedulingAgentRules((prev) => {
+      let changed = false;
+
+      const next = prev.map((rule) => {
+        if (
+          !rule.checkStatus ||
+          rule.checkStatus === "stale"
+        ) {
+          return rule;
+        }
+
+        changed = true;
+
+        return {
+          ...rule,
+          checkStatus: "stale",
+        };
+      });
+
+      return changed ? next : prev;
+    });
+  }, [schedule]);
+
+  /***************
+  FUNCTIONS
+  ***************/
   async function loadCloudProjectById(projectId, options = {}) {
     console.trace("loadCloudProjectById");
     const { showAlert = true, forceReload = false } = options;
@@ -685,7 +787,7 @@ export default function App() {
       setSchoolData(normalizedSchoolData);
       setSchedule(projectData.schedule || {});
       setTeacherHighlights(
-        projectData.teacherHighlights || createDefaultTeacherHighlights(),
+        normalizeTeacherHighlights(projectData.teacherHighlights),
       );
 
       // רשימת נקודות שמירה חדשה ונפרדת לפרויקט שנטען
@@ -709,7 +811,7 @@ export default function App() {
       localStorage.setItem(
         "teacherHighlights",
         JSON.stringify(
-          projectData.teacherHighlights || createDefaultTeacherHighlights(),
+          normalizeTeacherHighlights(projectData.teacherHighlights),
         ),
       );
       localStorage.setItem("checkpoints", JSON.stringify(nextCheckpoints));
@@ -752,6 +854,70 @@ export default function App() {
 
     await loadCloudProjectById(projectId);
   }
+
+  async function copyConstraintGroupsFromCloudProject(
+    sourceProjectId
+  ) {
+    const sourceProject = cloudProjects.find(
+      (project) => project.id === sourceProjectId
+    );
+
+    if (!sourceProject) {
+      alert("פרויקט המקור לא נמצא.");
+      return false;
+    }
+
+    const { data, error } = await supabase
+      .from("projects")
+      .select("data")
+      .eq("id", sourceProjectId)
+      .single();
+
+    if (error) {
+      console.error(
+        "Failed to load source project:",
+        error
+      );
+
+      alert("לא הצלחתי לטעון את פרויקט המקור.");
+      return false;
+    }
+
+    console.log("SOURCE PROJECT DATA:", data);
+
+    const sourceGroups =
+      data?.data?.schoolData?.constraintGroups;
+
+    if (!Array.isArray(sourceGroups)) {
+      console.error(
+        "No constraintGroups found in source project:",
+        data
+      );
+
+      alert(
+        "לא נמצאה רשימת קבוצות שיבוץ בפרויקט המקור."
+      );
+
+      return false;
+    }
+
+    const copiedGroups =
+      structuredClone(sourceGroups);
+
+    setSchoolData((prev) => ({
+      ...prev,
+      constraintGroups: copiedGroups,
+    }));
+
+    setHasUnsavedCloudChanges(true);
+
+    alert(
+      `הועתקו ${copiedGroups.length} קבוצות שיבוץ מהפרויקט "${sourceProject.name}".`
+    );
+
+    return true;
+  }
+
 
   async function loadCloudProjects() {
     if (!user) return;
@@ -882,7 +1048,7 @@ export default function App() {
     setSchoolData(normalizedSchoolData);
     setSchedule(projectData.schedule || {});
     setTeacherHighlights(
-      projectData.teacherHighlights || createDefaultTeacherHighlights()
+      normalizeTeacherHighlights(projectData.teacherHighlights)
     );
     setCheckpoints(projectData.checkpoints || []);
     setCurrentCheckpointId(projectData.currentCheckpointId || "");
@@ -895,7 +1061,7 @@ export default function App() {
     localStorage.setItem("schoolSchedule", JSON.stringify(projectData.schedule || {}));
     localStorage.setItem(
       "teacherHighlights",
-      JSON.stringify(projectData.teacherHighlights || createDefaultTeacherHighlights())
+      JSON.stringify(normalizeTeacherHighlights(projectData.teacherHighlights))
     );
     localStorage.setItem("checkpoints", JSON.stringify(projectData.checkpoints || []));
     localStorage.setItem("currentCheckpointId", projectData.currentCheckpointId || "");
@@ -1190,7 +1356,7 @@ export default function App() {
     updateScheduleWithHistory((prev) => {
       const newSchedule = structuredClone(prev);
 
-      for (const hour of hours) {
+      for (const hour of getAllHourNumbers()) {
         const groupsToRemove = new Set();
         const singleUnitIdsToRemove = new Set();
 
@@ -1305,6 +1471,275 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  function tryAgentWorkspaceMovePure({
+    workspace,
+    action,
+  }) {
+    const beforeValidationReport =
+      validateSchedule({
+        schedule:
+          workspace.workingSchedule,
+
+        schoolData,
+
+        approvedExceptions:
+          schedulingAgentApprovedExceptions,
+      });
+
+    const result =
+      tryWorkspaceMove({
+        workspace,
+        action,
+      });
+
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error,
+        workspace:
+          result.workspace,
+        validationReport:
+          beforeValidationReport,
+        validationComparison: null,
+      };
+    }
+
+    const afterValidationReport =
+      validateSchedule({
+        schedule:
+          result.workspace
+            .workingSchedule,
+
+        schoolData,
+
+        approvedExceptions:
+          schedulingAgentApprovedExceptions,
+      });
+
+    const beforeErrorCount =
+      beforeValidationReport
+        ?.statistics
+        ?.errorCount ??
+      beforeValidationReport
+        ?.errors?.length ??
+      0;
+
+    const afterErrorCount =
+      afterValidationReport
+        ?.statistics
+        ?.errorCount ??
+      afterValidationReport
+        ?.errors?.length ??
+      0;
+
+    const beforeWarningCount =
+      beforeValidationReport
+        ?.statistics
+        ?.warningCount ??
+      beforeValidationReport
+        ?.warnings?.length ??
+      0;
+
+    const afterWarningCount =
+      afterValidationReport
+        ?.statistics
+        ?.warningCount ??
+      afterValidationReport
+        ?.warnings?.length ??
+      0;
+
+    return {
+      success: true,
+      error: null,
+
+      workspace:
+        result.workspace,
+
+      validationReport:
+        afterValidationReport,
+
+      validationComparison: {
+        beforeErrorCount,
+        afterErrorCount,
+        errorDelta:
+          afterErrorCount -
+          beforeErrorCount,
+
+        beforeWarningCount,
+        afterWarningCount,
+        warningDelta:
+          afterWarningCount -
+          beforeWarningCount,
+      },
+    };
+  }
+
+  function simulateAgentScheduleMove(action) {
+    const simulation =
+      simulateScheduleMove({
+        schedule,
+        action,
+      });
+
+    if (!simulation.success) {
+      return {
+        ...simulation,
+        validationReport: null,
+      };
+    }
+
+    const validationReport =
+      validateSchedule({
+        schedule:
+          simulation.candidateSchedule,
+
+        schoolData,
+
+        approvedExceptions:
+          schedulingAgentApprovedExceptions,
+      });
+
+    return {
+      ...simulation,
+      validationReport,
+    };
+  }
+
+  function tryAgentWorkspaceMove(action) {
+    // אם עדיין אין Workspace פעיל,
+    // נפתח אותו אוטומטית מהמערכת האמיתית הנוכחית.
+    const currentWorkspace =
+      schedulingAgentWorkspace ||
+      createAgentWorkspace(schedule);
+
+    const beforeValidationReport =
+      validateSchedule({
+        schedule:
+          currentWorkspace.workingSchedule,
+        schoolData,
+        approvedExceptions:
+          schedulingAgentApprovedExceptions,
+      });
+
+    const result = tryWorkspaceMove({
+      workspace: currentWorkspace,
+      action,
+    });
+
+    // גם ניסיון שנכשל נרשם ב-attempts
+    if (!result.success) {
+      setSchedulingAgentWorkspace(
+        result.workspace
+      );
+
+      return {
+        success: false,
+        error: result.error,
+        workspace: result.workspace,
+        validationReport:
+          beforeValidationReport,
+        validationComparison: null,
+      };
+    }
+
+    const afterValidationReport =
+      validateSchedule({
+        schedule:
+          result.workspace.workingSchedule,
+        schoolData,
+        approvedExceptions:
+          schedulingAgentApprovedExceptions,
+      });
+
+    const beforeErrorCount =
+      beforeValidationReport?.statistics
+        ?.errorCount ??
+      beforeValidationReport?.errors
+        ?.length ??
+      0;
+
+    const afterErrorCount =
+      afterValidationReport?.statistics
+        ?.errorCount ??
+      afterValidationReport?.errors
+        ?.length ??
+      0;
+
+    const beforeWarningCount =
+      beforeValidationReport?.statistics
+        ?.warningCount ??
+      beforeValidationReport?.warnings
+        ?.length ??
+      0;
+
+    const afterWarningCount =
+      afterValidationReport?.statistics
+        ?.warningCount ??
+      afterValidationReport?.warnings
+        ?.length ??
+      0;
+
+    const validationComparison = {
+      beforeErrorCount,
+      afterErrorCount,
+      errorDelta:
+        afterErrorCount -
+        beforeErrorCount,
+
+      beforeWarningCount,
+      afterWarningCount,
+      warningDelta:
+        afterWarningCount -
+        beforeWarningCount,
+    };
+
+    // נוסיף את תוצאת ה-validator
+    // לניסיון האחרון ביומן.
+    const enrichedAttempts =
+      result.workspace.attempts.map(
+        (attempt, index) => {
+          if (
+            index !==
+            result.workspace.attempts
+              .length -
+            1
+          ) {
+            return attempt;
+          }
+
+          return {
+            ...attempt,
+            validationComparison,
+          };
+        }
+      );
+
+    const enrichedWorkspace = {
+      ...result.workspace,
+      attempts: enrichedAttempts,
+    };
+
+    setSchedulingAgentWorkspace(
+      enrichedWorkspace
+    );
+
+    console.log(
+      "AGENT WORKSPACE ATTEMPT:",
+      enrichedAttempts[
+      enrichedAttempts.length - 1
+      ]
+    );
+
+    return {
+      success: true,
+      error: null,
+      workspace: enrichedWorkspace,
+      validationReport:
+        afterValidationReport,
+      validationComparison,
+    };
+  }
+
   function buildEmptyScheduleTemplate() {
     const emptySchedule = {};
 
@@ -1351,7 +1786,7 @@ export default function App() {
       },
       schoolData,
       schedule: buildEmptyScheduleTemplate(),
-      teacherHighlights: [],
+      teacherHighlights: normalizeTeacherHighlights(teacherHighlights),
       checkpoints: [],
       currentCheckpointId: "",
       comparisonCheckpointId: "",
@@ -2180,7 +2615,7 @@ export default function App() {
       setSchoolData(normalizedSchoolData);
       setSchedule(projectData.schedule || {});
       setTeacherHighlights(
-        projectData.teacherHighlights || createDefaultTeacherHighlights(),
+        normalizeTeacherHighlights(projectData.teacherHighlights),
       );
 
       setCheckpoints(projectData.checkpoints || []);
@@ -2201,7 +2636,7 @@ export default function App() {
       localStorage.setItem(
         "teacherHighlights",
         JSON.stringify(
-          projectData.teacherHighlights || createDefaultTeacherHighlights(),
+          normalizeTeacherHighlights(projectData.teacherHighlights),
         ),
       );
 
@@ -2439,7 +2874,7 @@ export default function App() {
 
     for (const day of days) {
       for (const className of classes) {
-        for (const hour of hours) {
+        for (const hour of getAllHourNumbers(scheduleObject)) {
           const value = scheduleObject[day]?.[className]?.[hour];
           const unitIds = Array.isArray(value) ? value : value ? [value] : [];
 
@@ -2467,7 +2902,7 @@ export default function App() {
 
       for (const day of days) {
         for (const className of classes) {
-          for (const hour of hours) {
+          for (const hour of getAllHourNumbers(nextSchedule)) {
             const currentUnitIds = getCellUnitIdsFromSchedule(
               nextSchedule,
               day,
@@ -2773,7 +3208,7 @@ export default function App() {
 
     for (const day of days) {
       for (const className of classes) {
-        for (const hour of hours) {
+        for (const hour of getAllHourNumbers()) {
           const unitIds = getCellUnitIds(day, className, hour);
           const units = unitIds.map(getUnitById).filter(Boolean);
 
@@ -2931,8 +3366,8 @@ export default function App() {
         blockedSlots[normalizedDay] = wasBlocked
           ? dayHours.filter((item) => Number(item) !== hourNumber)
           : [...new Set([...dayHours.map(Number), hourNumber])].sort(
-              (a, b) => a - b,
-            );
+            (a, b) => a - b,
+          );
 
         return { ...group, blockedSlots };
       }),
@@ -2947,7 +3382,7 @@ export default function App() {
       let scheduledCount = 0;
 
       for (const day of days) {
-        for (const hour of hours) {
+        for (const hour of getAllHourNumbers()) {
           scheduledCount += getScheduledUnitsForConstraintGroupAt(
             groupId,
             day,
@@ -2970,7 +3405,7 @@ export default function App() {
 
           for (const day of days) {
             for (const className of classes) {
-              for (const hour of hours) {
+              for (const hour of getAllHourNumbers()) {
                 const currentIds = getCellUnitIdsFromSchedule(
                   nextSchedule,
                   day,
@@ -2997,8 +3432,8 @@ export default function App() {
 
     const blockedSlots = shouldBlock
       ? Object.fromEntries(
-          days.map((day) => [normalizeDay(day), hours.map(Number)]),
-        )
+        days.map((day) => [normalizeDay(day), getAllHourNumbers()]),
+      )
       : {};
 
     setSchoolData((prev) => ({
@@ -3017,8 +3452,8 @@ export default function App() {
 
       const constraintGroups = exists
         ? prev.constraintGroups.map((group) =>
-            group.id === groupToSave.id ? groupToSave : group,
-          )
+          group.id === groupToSave.id ? groupToSave : group,
+        )
         : [...prev.constraintGroups, groupToSave];
 
       return {
@@ -3515,7 +3950,7 @@ export default function App() {
       return false;
     }
 
-    for (const hour of hours) {
+    for (const hour of getAllHourNumbers()) {
       if (String(hour) === String(currentHour)) continue;
 
       const unitIds = getCellUnitIds(day, currentClass, hour);
@@ -3827,9 +4262,9 @@ export default function App() {
 
           const nextToUnits = append
             ? [
-                ...toUnits,
-                ...unitIdsForClass.filter((id) => !toUnits.includes(id)),
-              ]
+              ...toUnits,
+              ...unitIdsForClass.filter((id) => !toUnits.includes(id)),
+            ]
             : unitIdsForClass;
 
           setCellUnitIds(
@@ -4004,7 +4439,7 @@ export default function App() {
   function isUnitScheduled(unitId) {
     for (const day of days) {
       for (const className of classes) {
-        for (const hour of hours) {
+        for (const hour of getAllHourNumbers()) {
           if (getCellUnitIds(day, className, hour).includes(unitId)) {
             return true;
           }
@@ -4468,25 +4903,14 @@ export default function App() {
     const report = validateSchedule({
       schedule,
       schoolData,
-      approvedExceptions: [
-        {
-          type: "meetingParticipant",
-          meetingId: "meeting-1785136295118",
-          teacherId: "7",
-        },
-      ],
+      approvedExceptions:
+        schedulingAgentApprovedExceptions,
     });
 
     const agentContext = createSchedulingAgentContext({
       schoolData,
       schedule,
-      approvedExceptions: [
-        {
-          type: "meetingParticipant",
-          meetingId: "meeting-1785136295118",
-          teacherId: "7",
-        },
-      ],
+      approvedExceptions: schedulingAgentApprovedExceptions,
       rules: [],
     });
 
@@ -5177,7 +5601,7 @@ export default function App() {
           <ShahafView
             classes={classes}
             days={days}
-            hours={hours}
+            hours={getAllHourNumbers()}
             selectedClassForShahaf={selectedClassForShahaf}
             setSelectedClassForShahaf={setSelectedClassForShahaf}
             getCellUnitIds={getCellUnitIds}
@@ -5201,7 +5625,7 @@ export default function App() {
             teachers={teachers}
             classes={classes}
             days={days}
-            hours={hours}
+            hours={getAllHourNumbers()}
             teacherHasViewChanges={teacherHasViewChanges}
             selectedTeacherForView={selectedTeacherForView}
             setSelectedTeacherForView={setSelectedTeacherForView}
@@ -5275,7 +5699,7 @@ export default function App() {
           <GroupConstraintsView
             constraintGroups={constraintGroups}
             days={days}
-            hours={hours}
+            hours={getAllHourNumbers()}
             isGroupBlockedAt={isConstraintGroupBlockedAt}
             onToggleSlot={toggleConstraintGroupBlockedSlot}
             onSetAllSlots={setAllConstraintGroupSlotsBlocked}
@@ -5292,6 +5716,18 @@ export default function App() {
             onApprovedExceptionsChange={setSchedulingAgentApprovedExceptions}
             messages={schedulingAgentMessages}
             onMessagesChange={setSchedulingAgentMessages}
+            onSimulateScheduleMove={
+              simulateAgentScheduleMove
+            }
+            workspace={schedulingAgentWorkspace}
+            onStartWorkspace={startSchedulingAgentWorkspace}
+            onClearWorkspace={clearSchedulingAgentWorkspace}
+            onTryWorkspaceMove={
+              tryAgentWorkspaceMove
+            }
+            onTryWorkspaceMovePure={
+              tryAgentWorkspaceMovePure
+            }
           />
         )}
 
@@ -5320,6 +5756,9 @@ export default function App() {
             hasUnsavedCloudChanges={hasUnsavedCloudChanges}
             lastCloudSavedAt={lastCloudSavedAt}
             setShowHelpDialog={setShowHelpDialog}
+            copyConstraintGroupsFromCloudProject={
+              copyConstraintGroupsFromCloudProject
+            }
           />
         )}
 
@@ -5385,7 +5824,7 @@ export default function App() {
                   <strong>
                     {getTeacherById(groupDialogUnit.teacherId)?.name}
                     {groupDialogUnit.subject &&
-                    groupDialogUnit.subject !== "רגיל"
+                      groupDialogUnit.subject !== "רגיל"
                       ? ` / ${groupDialogUnit.subject}`
                       : ""}
                   </strong>
