@@ -9,7 +9,7 @@ import {
   isTeacherFreeDay,
   isTeacherBlockedHour,
   isHourInsideClassDay,
-} from "./scheduleUtils";
+} from "./scheduleUtils.js";
 
 /**
  * מנרמל שם יום.

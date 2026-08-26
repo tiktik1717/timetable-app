@@ -2670,6 +2670,69 @@ export default function App() {
     }
   }
 
+  async function addProjectFileToCurrentProject(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const projectData = JSON.parse(text);
+
+      if (!projectData.schoolData || !projectData.schedule) {
+        throw new Error("קובץ הפרויקט אינו תקין");
+      }
+
+      const normalizedSchoolData = ensureDailyHoursForClasses(
+        projectData.schoolData,
+      );
+      const normalizedHighlights = normalizeTeacherHighlights(
+        projectData.teacherHighlights,
+      );
+
+      // חשוב: אנחנו מייבאים רק את מצב המערכת מהקובץ.
+      // נקודות שמירה ומזהי נקודות שמירה מהקובץ המיובא נזרקים במכוון.
+      // נקודות השמירה של הפרויקט הנוכחי נשארות ללא שינוי.
+      setSchoolData(normalizedSchoolData);
+      setSchedule(projectData.schedule || {});
+      setTeacherHighlights(normalizedHighlights);
+
+      // המצב החדש אינו נקודת שמירה קיימת בפרויקט הנוכחי.
+      setCurrentCheckpointId("");
+
+      setHistory([]);
+      setFuture([]);
+
+      localStorage.setItem(
+        "schoolData",
+        JSON.stringify(normalizedSchoolData),
+      );
+      localStorage.setItem(
+        "schoolSchedule",
+        JSON.stringify(projectData.schedule || {}),
+      );
+      localStorage.setItem(
+        "teacherHighlights",
+        JSON.stringify(normalizedHighlights),
+      );
+      localStorage.setItem("currentCheckpointId", "");
+
+      // אין לגעת ב-checkpoints או comparisonCheckpointId:
+      // הם שייכים לפרויקט הנוכחי, לא לקובץ המיובא.
+
+      setHasUnsavedCloudChanges(true);
+
+      alert(
+        "מצב המערכת מהקובץ נוסף לפרויקט הנוכחי. " +
+        "נקודות השמירה שבקובץ לא יובאו, ונקודות השמירה הקיימות בפרויקט נשמרו."
+      );
+    } catch (error) {
+      console.error(error);
+      alert("הוספת הקובץ לפרויקט נכשלה: " + error.message);
+    } finally {
+      event.target.value = "";
+    }
+  }
+
   function getTeacherHighlight(teacher) {
     if (!teacher) return null;
 
@@ -5952,6 +6015,7 @@ export default function App() {
             saveProjectToFile={saveProjectToFile}
             saveSchedulingMetadataToFile={saveSchedulingMetadataToFile}
             loadProjectFromFile={loadProjectFromFile}
+            addProjectFileToCurrentProject={addProjectFileToCurrentProject}
             handleExcelUpload={handleExcelUpload}
             clearProject={clearProject}
             user={user}

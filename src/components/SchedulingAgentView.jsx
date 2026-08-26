@@ -2,6 +2,10 @@ import { useState } from "react";
 import {
   solveWithAgent,
 } from "../scheduling/agentSolver";
+import {
+  evaluateFormalRules,
+  formalRuleEvaluationsToRuleCheckResults,
+} from "../scheduling/ruleEvaluator";
 
 export default function SchedulingAgentView({
   agentContext,
@@ -24,6 +28,543 @@ export default function SchedulingAgentView({
   const [input, setInput] = useState("");
   const [newRuleText, setNewRuleText] = useState("");
   const [isAgentThinking, setIsAgentThinking] = useState(false);
+  const [isSandboxTesting, setIsSandboxTesting] = useState(false);
+  const [sandboxTestResult, setSandboxTestResult] = useState(null);
+  const [isBridgeTesting, setIsBridgeTesting] = useState(false);
+  const [bridgeTestResult, setBridgeTestResult] = useState(null);
+  const [isFailureTesting, setIsFailureTesting] = useState(false);
+  const [failureTestResult, setFailureTestResult] = useState(null);
+  const [isAutoRepairTesting, setIsAutoRepairTesting] = useState(false);
+  const [autoRepairTestResult, setAutoRepairTestResult] = useState(null);
+  const [isRuleCompiling, setIsRuleCompiling] = useState(false);
+  const [ruleCompilerResult, setRuleCompilerResult] = useState(null);
+  const [ruleCompilerPhase, setRuleCompilerPhase] = useState("");
+  const [agentTelemetry, setAgentTelemetry] = useState({
+    calls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+    totalDurationMs: 0,
+    lastModel: null,
+    lastContextChars: 0,
+    lastContextProfile: null,
+  });
+
+  function recordTelemetry(telemetry) {
+    if (!telemetry) return;
+
+    setAgentTelemetry((prev) => ({
+      calls: prev.calls + 1,
+      inputTokens:
+        prev.inputTokens +
+        (Number(telemetry.inputTokens) || 0),
+      outputTokens:
+        prev.outputTokens +
+        (Number(telemetry.outputTokens) || 0),
+      totalTokens:
+        prev.totalTokens +
+        (Number(telemetry.totalTokens) || 0),
+      totalDurationMs:
+        prev.totalDurationMs +
+        (Number(telemetry.durationMs) || 0),
+      lastModel:
+        telemetry.model || prev.lastModel,
+      lastContextChars:
+        Number(telemetry.contextChars) || 0,
+      lastContextProfile:
+        telemetry.contextProfile || null,
+    }));
+  }
+
+  function buildDeterministicRuleCheckResults(scheduleOverride = null) {
+    const scheduleToCheck =
+      scheduleOverride ||
+      workspace?.workingSchedule ||
+      agentContext?.baseSchedule ||
+      {};
+
+    const evaluations = evaluateFormalRules({
+      rules: rules || [],
+      schedule: scheduleToCheck,
+      schoolData: agentContext?.schoolData || {},
+    });
+
+    return {
+      evaluations,
+      ruleCheckResults:
+        formalRuleEvaluationsToRuleCheckResults(
+          evaluations,
+        ),
+    };
+  }
+
+  function mergeRuleCheckResults(
+    agentResults = [],
+    deterministicResults = [],
+  ) {
+    const merged = new Map();
+
+    for (const result of agentResults || []) {
+      if (result?.ruleId) {
+        merged.set(result.ruleId, result);
+      }
+    }
+
+    // Deterministic checks take precedence over an LLM judgment for the
+    // same rule, because they were evaluated directly against the schedule.
+    for (const result of deterministicResults || []) {
+      if (result?.ruleId) {
+        merged.set(result.ruleId, result);
+      }
+    }
+
+    return [...merged.values()];
+  }
+
+  async function runPythonSandboxTest() {
+    if (isSandboxTesting) return;
+
+    const schoolData = agentContext?.schoolData;
+    if (!schoolData) {
+      setSandboxTestResult({
+        success: false,
+        error: "אין schoolData זמין לבדיקת ה-Sandbox.",
+      });
+      return;
+    }
+
+    setIsSandboxTesting(true);
+    setSandboxTestResult(null);
+
+    try {
+      const response = await fetch(
+        "/.netlify/functions/python-sandbox-test",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ schoolData }),
+        },
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "בדיקת Python Sandbox נכשלה");
+      }
+
+      setSandboxTestResult(data);
+      recordTelemetry(data.telemetry);
+    } catch (error) {
+      console.error("Python sandbox test failed:", error);
+      setSandboxTestResult({
+        success: false,
+        error: error?.message || "שגיאה לא ידועה בבדיקת ה-Sandbox",
+      });
+    } finally {
+      setIsSandboxTesting(false);
+    }
+  }
+
+  async function runCandidateValidatorBridgeTest() {
+    if (isBridgeTesting) return;
+
+    const schoolData = agentContext?.schoolData;
+    const baseSchedule = agentContext?.baseSchedule;
+
+    if (!schoolData || !baseSchedule) {
+      setBridgeTestResult({
+        success: false,
+        error: "אין schoolData/baseSchedule זמין לבדיקת הגשר.",
+      });
+      return;
+    }
+
+    setIsBridgeTesting(true);
+    setBridgeTestResult(null);
+
+    try {
+      const response = await fetch(
+        "/.netlify/functions/candidate-validator-bridge",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            schoolData,
+            baseSchedule,
+            approvedExceptions: approvedExceptions || [],
+            rules: rules || [],
+          }),
+        },
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          data?.error || "בדיקת Candidate → Validator נכשלה",
+        );
+      }
+
+      setBridgeTestResult(data);
+      recordTelemetry(data.telemetry);
+    } catch (error) {
+      console.error("Candidate -> Validator bridge test failed:", error);
+      setBridgeTestResult({
+        success: false,
+        error:
+          error?.message ||
+          "שגיאה לא ידועה בבדיקת Candidate → Validator",
+      });
+    } finally {
+      setIsBridgeTesting(false);
+    }
+  }
+
+  async function runCandidateValidatorFailureTest() {
+    if (isFailureTesting) return;
+
+    const schoolData = agentContext?.schoolData;
+    const baseSchedule = agentContext?.baseSchedule;
+
+    if (!schoolData || !baseSchedule) {
+      setFailureTestResult({
+        success: false,
+        error: "אין schoolData/baseSchedule זמין לבדיקת הכשל המכוון.",
+      });
+      return;
+    }
+
+    setIsFailureTesting(true);
+    setFailureTestResult(null);
+
+    try {
+      const response = await fetch(
+        "/.netlify/functions/candidate-validator-failure-test",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            schoolData,
+            baseSchedule,
+            approvedExceptions: approvedExceptions || [],
+          }),
+        },
+      );
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(
+          data?.error || "בדיקת הכשל המכוון נכשלה",
+        );
+      }
+
+      setFailureTestResult(data);
+      recordTelemetry(data.telemetry);
+    } catch (error) {
+      console.error("Candidate failure-injection test failed:", error);
+      setFailureTestResult({
+        success: false,
+        error:
+          error?.message ||
+          "שגיאה לא ידועה בבדיקת הכשל המכוון",
+      });
+    } finally {
+      setIsFailureTesting(false);
+    }
+  }
+
+  async function parseJsonResponse(response, label) {
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(
+        `${label}: השרת החזיר תגובה שאינה JSON (${response.status}). ${text.slice(0, 240)}`,
+      );
+    }
+  }
+
+  function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function pollBackgroundResponse({ responseId, phaseLabel }) {
+    const startedAt = Date.now();
+    const maxWaitMs = 8 * 60 * 1000;
+    let consecutiveErrors = 0;
+
+    while (Date.now() - startedAt < maxWaitMs) {
+      try {
+        const response = await fetch(
+          "/.netlify/functions/auto-repair-async-poll",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ responseId }),
+          },
+        );
+        const data = await parseJsonResponse(response, `${phaseLabel} polling`);
+        if (!response.ok || !data?.success) {
+          throw new Error(data?.error || `${phaseLabel}: polling נכשל`);
+        }
+
+        consecutiveErrors = 0;
+        setAutoRepairTestResult((previous) => ({
+          ...(previous || {}),
+          running: true,
+          backgroundStatus: data.status || "unknown",
+        }));
+
+        if (data.terminal) {
+          if (data.status !== "completed") {
+            throw new Error(
+              `${phaseLabel}: OpenAI background response הסתיים במצב ${data.status}. ${JSON.stringify(data.error || {})}`,
+            );
+          }
+          return data;
+        }
+      } catch (error) {
+        consecutiveErrors += 1;
+        if (consecutiveErrors >= 3) throw error;
+      }
+
+      await wait(2000);
+    }
+
+    throw new Error(`${phaseLabel}: ההרצה האסינכרונית לא הסתיימה בתוך 8 דקות.`);
+  }
+
+  async function cleanupTemporaryAgentFiles(fileIds) {
+    if (!Array.isArray(fileIds) || fileIds.length === 0) return;
+    try {
+      await fetch("/.netlify/functions/auto-repair-async-cleanup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileIds }),
+      });
+    } catch (error) {
+      console.warn("Temporary agent file cleanup failed:", error);
+    }
+  }
+
+  async function runAutoRepairLoopTest() {
+    if (isAutoRepairTesting) return;
+
+    const schoolData = agentContext?.schoolData;
+    const baseSchedule = agentContext?.baseSchedule;
+    if (!schoolData || !baseSchedule) {
+      setAutoRepairTestResult({
+        success: false,
+        error: "אין schoolData/baseSchedule זמין לבדיקת Auto-Repair.",
+      });
+      return;
+    }
+
+    setIsAutoRepairTesting(true);
+    setAutoRepairTestResult({
+      success: false,
+      running: true,
+      currentPhase: "attempt-0-start",
+      backgroundStatus: "starting",
+      attempts: [],
+    });
+
+    let attempt0InputFileIds = [];
+    let attempt1InputFileIds = [];
+
+    try {
+      // ATTEMPT 0 — START (fast request)
+      const start0Response = await fetch(
+        "/.netlify/functions/auto-repair-async-start-0",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ schoolData, baseSchedule }),
+        },
+      );
+      const start0 = await parseJsonResponse(start0Response, "Attempt 0 start");
+      if (!start0Response.ok || !start0?.success) {
+        throw new Error(start0?.error || "Attempt 0 לא הצליח להתחיל");
+      }
+      attempt0InputFileIds = start0.inputFileIds || [];
+
+      setAutoRepairTestResult((previous) => ({
+        ...(previous || {}),
+        currentPhase: "attempt-0-running",
+        backgroundStatus: start0.status || "queued",
+        attempt0ResponseId: start0.responseId,
+      }));
+
+      await pollBackgroundResponse({
+        responseId: start0.responseId,
+        phaseLabel: "Attempt 0",
+      });
+
+      // ATTEMPT 0 — COLLECT + VALIDATE (fast request)
+      setAutoRepairTestResult((previous) => ({
+        ...(previous || {}),
+        currentPhase: "attempt-0-collect",
+        backgroundStatus: "completed",
+      }));
+      const collect0Response = await fetch(
+        "/.netlify/functions/auto-repair-async-collect-0",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            responseId: start0.responseId,
+            inputFileIds: attempt0InputFileIds,
+            schoolData,
+            baseSchedule,
+            approvedExceptions: approvedExceptions || [],
+          }),
+        },
+      );
+      const data0 = await parseJsonResponse(collect0Response, "Attempt 0 collect");
+      attempt0InputFileIds = [];
+      recordTelemetry(data0.telemetry);
+
+      const attempt0View = {
+        number: 0,
+        purpose: "inject-multistep-displacement-defect",
+        validation: data0.validation,
+        codeRuns: data0.codeRuns || [],
+        injectedFailure: data0.injectedFailure || null,
+        diagnostics: data0.diagnostics || null,
+      };
+
+      if (!collect0Response.ok || !data0?.success) {
+        setAutoRepairTestResult({
+          success: false,
+          running: false,
+          currentPhase: "attempt-0-collect",
+          backgroundStatus: "completed",
+          error: data0?.error || "Attempt 0 לא הצליח ליצור פגם מבוקר",
+          attempts: [attempt0View],
+          checks: { attempt0: data0.checks || null },
+        });
+        return;
+      }
+
+      setAutoRepairTestResult({
+        success: false,
+        running: true,
+        currentPhase: "attempt-1-start",
+        backgroundStatus: "starting",
+        attempts: [attempt0View],
+        checks: { attempt0: data0.checks },
+      });
+
+      // ATTEMPT 1 — START (fast request). It does not receive the pristine schedule.
+      const start1Response = await fetch(
+        "/.netlify/functions/auto-repair-async-start-1",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            schoolData,
+            brokenSchedule: data0.brokenSchedule,
+            approvedExceptions: approvedExceptions || [],
+          }),
+        },
+      );
+      const start1 = await parseJsonResponse(start1Response, "Attempt 1 start");
+      if (!start1Response.ok || !start1?.success) {
+        throw new Error(start1?.error || "Attempt 1 לא הצליח להתחיל");
+      }
+      attempt1InputFileIds = start1.inputFileIds || [];
+
+      setAutoRepairTestResult((previous) => ({
+        ...(previous || {}),
+        currentPhase: "attempt-1-running",
+        backgroundStatus: start1.status || "queued",
+        attempt1ResponseId: start1.responseId,
+      }));
+
+      await pollBackgroundResponse({
+        responseId: start1.responseId,
+        phaseLabel: "Attempt 1",
+      });
+
+      // ATTEMPT 1 — COLLECT + FINAL VALIDATION
+      setAutoRepairTestResult((previous) => ({
+        ...(previous || {}),
+        currentPhase: "attempt-1-collect",
+        backgroundStatus: "completed",
+      }));
+      const collect1Response = await fetch(
+        "/.netlify/functions/auto-repair-async-collect-1",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            responseId: start1.responseId,
+            inputFileIds: attempt1InputFileIds,
+            schoolData,
+            brokenSchedule: data0.brokenSchedule,
+            approvedExceptions: approvedExceptions || [],
+          }),
+        },
+      );
+      const data1 = await parseJsonResponse(collect1Response, "Attempt 1 collect");
+      attempt1InputFileIds = [];
+      if (!collect1Response.ok) {
+        throw new Error(data1?.error || "Attempt 1 collect נכשל");
+      }
+      recordTelemetry(data1.telemetry);
+
+      const attempt1View = {
+        number: 1,
+        purpose: "autonomous-repair-from-validator-feedback",
+        validation: data1.validation,
+        codeRuns: data1.codeRuns || [],
+        reply: data1.reply || "",
+        diagnostics: data1.diagnostics || null,
+      };
+
+      setAutoRepairTestResult({
+        success: Boolean(data1.success),
+        error: data1.success ? null : (data1.error || "Attempt 1 לא עבר את בדיקת התיקון"),
+        running: false,
+        currentPhase: "done",
+        backgroundStatus: "completed",
+        attempts: [attempt0View, attempt1View],
+        checks: {
+          attempt0: data0.checks,
+          attempt1: data1.checks,
+        },
+        telemetry: {
+          calls: 2,
+          inputTokens:
+            (Number(data0.telemetry?.inputTokens) || 0) +
+            (Number(data1.telemetry?.inputTokens) || 0),
+          outputTokens:
+            (Number(data0.telemetry?.outputTokens) || 0) +
+            (Number(data1.telemetry?.outputTokens) || 0),
+          totalTokens:
+            (Number(data0.telemetry?.totalTokens) || 0) +
+            (Number(data1.telemetry?.totalTokens) || 0),
+          durationMs:
+            (Number(data0.telemetry?.durationMs) || 0) +
+            (Number(data1.telemetry?.durationMs) || 0),
+        },
+      });
+    } catch (error) {
+      console.error("Async auto-repair loop test failed:", error);
+      setAutoRepairTestResult((previous) => ({
+        ...(previous || {}),
+        success: false,
+        running: false,
+        error:
+          error?.message ||
+          "שגיאה לא ידועה בבדיקת Auto-Repair האסינכרונית",
+      }));
+    } finally {
+      // If an attempt failed before its collect endpoint, uploaded OpenAI files
+      // are cleaned up here. They also have a one-hour server-side expiry.
+      await cleanupTemporaryAgentFiles(attempt0InputFileIds);
+      await cleanupTemporaryAgentFiles(attempt1InputFileIds);
+      setIsAutoRepairTesting(false);
+    }
+  }
 
   function createAgentMessage(text, type = "message", actions = []) {
     return {
@@ -91,32 +632,20 @@ export default function SchedulingAgentView({
     const units =
       agentContext?.schoolData?.teachingUnits || [];
 
-    const teachers =
-      agentContext?.schoolData?.teachers || [];
+    const byUnitId = new Map(
+      units.map((unit) => [unit.id, unit])
+    );
 
-    const result = {};
+    // Compact wire format. Teacher names are already present in entitySummary,
+    // so the schedule snapshot sends only placements. This removes thousands
+    // of repeated JSON field names from every LLM call.
+    // placement tuple = [day, hour, className, unitId]
+    const byTeacher = {};
 
-    for (const teacher of teachers) {
-      result[String(teacher.id)] = {
-        teacherId: String(teacher.id),
-        teacherName: teacher.name,
-        days: {},
-      };
-    }
-
-    for (const [day, daySchedule] of Object.entries(
-      schedule
-    )) {
-      for (const [
-        className,
-        classSchedule,
-      ] of Object.entries(daySchedule || {})) {
-        for (const [
-          hourKey,
-          cellValue,
-        ] of Object.entries(classSchedule || {})) {
+    for (const [day, daySchedule] of Object.entries(schedule)) {
+      for (const [className, classSchedule] of Object.entries(daySchedule || {})) {
+        for (const [hourKey, cellValue] of Object.entries(classSchedule || {})) {
           const hour = Number(hourKey);
-
           const unitIds = Array.isArray(cellValue)
             ? cellValue
             : cellValue
@@ -124,54 +653,39 @@ export default function SchedulingAgentView({
               : [];
 
           for (const unitId of unitIds) {
-            const unit = units.find(
-              (item) => item.id === unitId
-            );
+            const unit = byUnitId.get(unitId);
+            if (!unit?.teacherId) continue;
 
-            if (!unit?.teacherId) {
-              continue;
+            const teacherId = String(unit.teacherId);
+            if (!byTeacher[teacherId]) {
+              byTeacher[teacherId] = [];
             }
 
-            const teacherId = String(
-              unit.teacherId
-            );
-
-            if (!result[teacherId]) {
-              result[teacherId] = {
-                teacherId,
-                teacherName:
-                  unit.teacherName || teacherId,
-                days: {},
-              };
-            }
-
-            if (!result[teacherId].days[day]) {
-              result[teacherId].days[day] = [];
-            }
-
-            result[teacherId].days[day].push({
+            byTeacher[teacherId].push([
+              day,
               hour,
               className,
               unitId,
-              unitType: unit.type || null,
-            });
+            ]);
           }
         }
       }
     }
 
-    // מיון השעות בכל יום
-    for (const teacher of Object.values(result)) {
-      for (const day of Object.keys(
-        teacher.days
-      )) {
-        teacher.days[day].sort(
-          (a, b) => a.hour - b.hour
-        );
-      }
+    for (const placements of Object.values(byTeacher)) {
+      placements.sort((a, b) => {
+        const dayOrder =
+          (agentContext?.schoolData?.days || []).indexOf(a[0]) -
+          (agentContext?.schoolData?.days || []).indexOf(b[0]);
+        return dayOrder || a[1] - b[1] || String(a[2]).localeCompare(String(b[2]));
+      });
     }
 
-    return result;
+    return {
+      format: "teacher-placements-v2",
+      fields: ["day", "hour", "className", "unitId"],
+      byTeacher,
+    };
   }
 
   async function askAgentToEvaluateAttempt({
@@ -185,6 +699,11 @@ export default function SchedulingAgentView({
     const workspaceTeacherSummary =
       buildTeacherScheduleSummary(
         workspaceSchedule
+      );
+
+    const deterministicRules =
+      buildDeterministicRuleCheckResults(
+        workspaceSchedule,
       );
 
     const response = await fetch(
@@ -274,6 +793,9 @@ ${JSON.stringify(
 
           approvedExceptions:
             approvedExceptions || [],
+
+          formalRuleEvaluations:
+            deterministicRules.evaluations,
         }),
       }
     );
@@ -287,7 +809,15 @@ ${JSON.stringify(
       );
     }
 
-    return data;
+    recordTelemetry(data.telemetry);
+
+    return {
+      ...data,
+      ruleCheckResults: mergeRuleCheckResults(
+        data.ruleCheckResults || [],
+        deterministicRules.ruleCheckResults,
+      ),
+    };
   }
 
   async function handleSend() {
@@ -303,26 +833,8 @@ ${JSON.stringify(
     const teacherScheduleSummary =
       buildTeacherScheduleSummary();
 
-    console.log(
-      "RAW AGENT SCHEDULE:",
-      agentContext?.baseSchedule
-    );
-
-    console.log(
-      "RAW AGENT SCHOOL DATA:",
-      agentContext?.schoolData
-    );
-
-
-    console.log(
-      "Teacher schedule summary:",
-      teacherScheduleSummary
-    );
-
-    console.log(
-      "Kolodkin schedule:",
-      teacherScheduleSummary["40"]
-    );
+    const deterministicRules =
+      buildDeterministicRuleCheckResults();
 
     const userMessage = {
       id: `user-${Date.now()}`,
@@ -397,6 +909,9 @@ ${JSON.stringify(
 
             approvedExceptions:
               approvedExceptions || [],
+
+            formalRuleEvaluations:
+              deterministicRules.evaluations,
           }),
         }
       );
@@ -415,25 +930,18 @@ ${JSON.stringify(
         );
       }
 
-      if (
-        proposedAction?.type ===
-        "proposeScheduleMove"
-      ) {
-        const solverResult =
-          await runAgentSolver(
-            proposedAction
-          );
+      recordTelemetry(data.telemetry);
 
-        console.log(
-          "FINAL SOLVER RESULT:",
-          solverResult
-        );
-      }
-      
+      let proposedAction =
+        data.proposedAction;
+
       const ruleCheckResults =
-        Array.isArray(data.ruleCheckResults)
-          ? data.ruleCheckResults
-          : [];
+        mergeRuleCheckResults(
+          Array.isArray(data.ruleCheckResults)
+            ? data.ruleCheckResults
+            : [],
+          deterministicRules.ruleCheckResults,
+        );
 
       if (ruleCheckResults.length > 0) {
         onRulesChange((prev) =>
@@ -466,9 +974,6 @@ ${JSON.stringify(
           })
         );
       }
-
-      let proposedAction =
-        data.proposedAction;
 
       if (
         proposedAction?.type ===
@@ -579,6 +1084,262 @@ ${JSON.stringify(
 
   const statistics = validationReport?.statistics || {};
 
+  function applyDeterministicCategoryGuard(rule, compiledCategory) {
+    if (rule?.categorySource === "user") {
+      return rule.category || "unspecified";
+    }
+
+    const text = String(rule?.originalText || "").trim();
+
+    const recommendedPattern =
+      /(מומלץ|רצוי|עדיף|כדאי|יש לנסות|עדיפות|ככל שניתן|ככל האפשר|להשתדל)/;
+
+    const criticalPattern =
+      /(אסור|אין לשבץ|חייב|חובה|צריכים|צריך|יש לשבץ|יש לקבוע|לא יכול|לא ניתן)/;
+
+    if (recommendedPattern.test(text)) {
+      return "recommended";
+    }
+
+    if (criticalPattern.test(text)) {
+      return "critical";
+    }
+
+    return compiledCategory || rule?.category || "unspecified";
+  }
+
+  async function runRuleCompiler() {
+    if (isRuleCompiling || !rules?.length) return;
+
+    const schoolData = agentContext?.schoolData;
+    if (!schoolData) {
+      setRuleCompilerResult({
+        success: false,
+        error: "אין schoolData זמין ל-Rule Compiler.",
+      });
+      return;
+    }
+
+    setIsRuleCompiling(true);
+    setRuleCompilerResult(null);
+
+    try {
+      setRuleCompilerPhase("מתחיל קומפילציה...");
+
+      const startResponse = await fetch(
+        "/.netlify/functions/rule-compiler-async-start",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rules: rules || [],
+            schoolData,
+          }),
+        },
+      );
+
+      const startData = await parseJsonResponse(
+        startResponse,
+        "Rule Compiler v4.5 start",
+      );
+
+      if (!startResponse.ok || !startData?.success) {
+        throw new Error(
+          startData?.error ||
+            "Rule Compiler v4.5 לא הצליח להתחיל",
+        );
+      }
+
+      const responseId = startData.responseId;
+      const startedAt = Date.now();
+
+      if (!responseId) {
+        throw new Error(
+          "Rule Compiler v4.5 לא החזיר responseId",
+        );
+      }
+
+      let data = null;
+      const maxPolls = 60;
+      const pollDelayMs = 3000;
+
+      for (
+        let pollIndex = 0;
+        pollIndex < maxPolls;
+        pollIndex += 1
+      ) {
+        setRuleCompilerPhase(
+          `ממתין לתוצאת Rule Compiler... ${pollIndex + 1}`,
+        );
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, pollDelayMs)
+        );
+
+        const collectResponse = await fetch(
+          "/.netlify/functions/rule-compiler-async-collect",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              responseId,
+              startedAt,
+            }),
+          },
+        );
+
+        const collectData =
+          await parseJsonResponse(
+            collectResponse,
+            "Rule Compiler v4.5 collect",
+          );
+
+        if (
+          !collectResponse.ok ||
+          collectData?.success === false
+        ) {
+          throw new Error(
+            collectData?.error ||
+              "Rule Compiler v4.5 נכשל בזמן איסוף התוצאה",
+          );
+        }
+
+        if (collectData?.completed) {
+          data = collectData;
+          break;
+        }
+      }
+
+      if (!data?.completed) {
+        throw new Error(
+          "Rule Compiler v4.5 לא הסתיים בתוך 3 דקות",
+        );
+      }
+
+      const numberedRules = (rules || []).map(
+        (rule, index) => ({
+          ...rule,
+          ruleNumber: rule.ruleNumber || index + 1,
+        }),
+      );
+
+      const compiledById = new Map(
+        (data.compiledRules || []).map((item) => [
+          item.ruleId,
+          item,
+        ]),
+      );
+
+      const nextRules = numberedRules.map((rule) => {
+        const compiled = compiledById.get(rule.id);
+        if (!compiled) return rule;
+
+        let formalRule = null;
+        if (
+          compiled.formalizationStatus === "formalized" &&
+          compiled.formalRuleJson
+        ) {
+          try {
+            formalRule = JSON.parse(
+              compiled.formalRuleJson,
+            );
+
+            formalRule.severity =
+              applyDeterministicCategoryGuard(
+                rule,
+                compiled.category,
+              );
+          } catch (error) {
+            console.error(
+              "Rule Compiler returned invalid formalRuleJson:",
+              error,
+            );
+          }
+        }
+
+        return {
+          ...rule,
+          category:
+            applyDeterministicCategoryGuard(
+              rule,
+              compiled.category,
+            ),
+          categorySource:
+            rule.categorySource === "user"
+              ? "user"
+              : "compiler",
+          status: compiled.formalizationStatus,
+          interpretation: compiled.interpretation,
+          formalRule,
+          evaluatorKey:
+            compiled.evaluatorKey || "unsupported",
+          resolvedEntities:
+            compiled.resolvedEntities || [],
+          clarificationQuestion:
+            compiled.clarificationQuestion || null,
+          compilerExplanation:
+            compiled.explanation || "",
+          compiledAt: new Date().toISOString(),
+          compilerVersion: "rule-compiler-v4.2-generic",
+        };
+      });
+
+      const evaluations = evaluateFormalRules({
+        rules: nextRules,
+        schedule:
+          workspace?.workingSchedule ||
+          agentContext?.baseSchedule ||
+          {},
+        schoolData: agentContext?.schoolData || {},
+      });
+
+      const deterministicResults =
+        formalRuleEvaluationsToRuleCheckResults(
+          evaluations,
+        );
+
+      const evaluatedRules = nextRules.map((rule) => {
+        const result = deterministicResults.find(
+          (item) => item.ruleId === rule.id,
+        );
+
+        if (!result) return rule;
+
+        return {
+          ...rule,
+          evaluatorSupported:
+            result.status !== "unknown",
+          checkStatus: result.status,
+          checkSummary: result.summary,
+          checkViolations: result.violations || [],
+          checkedAt: new Date().toISOString(),
+        };
+      });
+
+      onRulesChange(() => evaluatedRules);
+
+      setRuleCompilerResult({
+        ...data,
+        evaluations,
+        deterministicResults,
+      });
+      recordTelemetry(data.telemetry);
+    } catch (error) {
+      console.error("Rule Compiler v4.5 failed:", error);
+      setRuleCompilerResult({
+        success: false,
+        error:
+          error?.message ||
+          "שגיאה לא ידועה ב-Rule Compiler v4.5",
+      });
+    } finally {
+      setIsRuleCompiling(false);
+      setRuleCompilerPhase("");
+    }
+  }
+
   function handleAddRule() {
     const text = newRuleText.trim();
 
@@ -586,10 +1347,22 @@ ${JSON.stringify(
       return;
     }
 
+    const nextRuleNumber =
+      (rules || []).reduce(
+        (max, rule, index) =>
+          Math.max(
+            max,
+            Number(rule.ruleNumber) || index + 1,
+          ),
+        0,
+      ) + 1;
+
     const newRule = {
       id: `rule-${Date.now()}`,
+      ruleNumber: nextRuleNumber,
       originalText: text,
       status: "unparsed",
+      category: "unspecified",
       createdAt: new Date().toISOString(),
     };
 
@@ -722,6 +1495,28 @@ ${JSON.stringify(
     }
   }
 
+  function handleRuleCategoryChange(ruleId, category) {
+    onRulesChange((prev) =>
+      prev.map((rule) => {
+        if (rule.id !== ruleId) return rule;
+
+        return {
+          ...rule,
+          category,
+          categorySource: "user",
+          // Changing severity does not change the semantic IR,
+          // but the formal rule must reflect the user's decision.
+          formalRule: rule.formalRule
+            ? {
+                ...rule.formalRule,
+                severity: category,
+              }
+            : rule.formalRule,
+        };
+      })
+    );
+  }
+
   function handleDeleteRule(ruleId) {
     onRulesChange((prev) =>
       prev.filter((rule) => rule.id !== ruleId)
@@ -746,6 +1541,355 @@ ${JSON.stringify(
   return (
     <div className="scheduling-agent-view">
       <h2>סוכן שיבוץ AI</h2>
+
+      <div className="scheduling-agent-telemetry">
+        <strong>שימוש API בסשן:</strong>{" "}
+        {agentTelemetry.calls} קריאות · {" "}
+        {agentTelemetry.inputTokens.toLocaleString()} קלט · {" "}
+        {agentTelemetry.outputTokens.toLocaleString()} פלט · {" "}
+        {agentTelemetry.totalTokens.toLocaleString()} סה״כ tokens
+        {agentTelemetry.lastModel
+          ? ` · ${agentTelemetry.lastModel}`
+          : ""}
+        {agentTelemetry.lastContextChars
+          ? ` · context ${agentTelemetry.lastContextChars.toLocaleString()} chars`
+          : ""}
+      </div>
+
+      <div className="scheduling-agent-panel scheduling-agent-sandbox-panel">
+        <div className="scheduling-agent-sandbox-header">
+          <div>
+            <strong>Python Sandbox v1</strong>
+            <div className="scheduling-agent-sandbox-subtitle">
+              בדיקת תשתית: ה-Agent קורא metadata כקובץ ומריץ Python מבודד.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={runPythonSandboxTest}
+            disabled={isSandboxTesting || !agentContext?.schoolData}
+          >
+            {isSandboxTesting ? "מריץ Python..." : "בדוק Python Sandbox"}
+          </button>
+        </div>
+
+        {sandboxTestResult && (
+          <div
+            className={
+              sandboxTestResult.success
+                ? "scheduling-agent-sandbox-result success"
+                : "scheduling-agent-sandbox-result error"
+            }
+          >
+            {sandboxTestResult.success ? (
+              <>
+                <div>✓ ה-Sandbox הריץ Python וקרא את metadata.json.</div>
+                <div>
+                  מורים: {sandboxTestResult.result?.teacherCount ?? "?"} · כיתות: {sandboxTestResult.result?.classCount ?? "?"} · יחידות הוראה: {sandboxTestResult.result?.teachingUnitCount ?? "?"}
+                </div>
+                <div>
+                  Python runs: {sandboxTestResult.telemetry?.codeInterpreterCalls ?? 0} · קובץ קלט: {(sandboxTestResult.inputFile?.bytes ?? 0).toLocaleString()} bytes
+                </div>
+                {Array.isArray(sandboxTestResult.codeRuns) &&
+                  sandboxTestResult.codeRuns.length > 0 && (
+                    <details>
+                      <summary>הצג את קוד ה-Python וה-logs</summary>
+                      {sandboxTestResult.codeRuns.map((run, index) => (
+                        <div key={run.id || index} className="scheduling-agent-sandbox-code-run">
+                          <strong>הרצה {index + 1}</strong>
+                          <pre>{run.code || "(לא הוחזר קוד)"}</pre>
+                          {run.logs && (
+                            <>
+                              <strong>logs</strong>
+                              <pre>{run.logs}</pre>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </details>
+                  )}
+              </>
+            ) : (
+              <>
+                <div>✕ {sandboxTestResult.error || sandboxTestResult.diagnostic?.message || "ה-Sandbox לא עבר את בדיקת התשתית."}</div>
+                {sandboxTestResult.checks && (
+                  <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
+                    {JSON.stringify(sandboxTestResult.checks, null, 2)}
+                  </pre>
+                )}
+                {sandboxTestResult.diagnostic && (
+                  <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
+                    {JSON.stringify(sandboxTestResult.diagnostic, null, 2)}
+                  </pre>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="scheduling-agent-panel scheduling-agent-sandbox-panel">
+        <div className="scheduling-agent-sandbox-header">
+          <div>
+            <strong>Candidate → Validator bridge v1</strong>
+            <div className="scheduling-agent-sandbox-subtitle">
+              Python יוצר candidate-schedule.json, השרת מוריד אותו מה-container ומריץ עליו את ה-Validator האמיתי.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={runCandidateValidatorBridgeTest}
+            disabled={
+              isBridgeTesting ||
+              !agentContext?.schoolData ||
+              !agentContext?.baseSchedule
+            }
+          >
+            {isBridgeTesting
+              ? "יוצר Candidate ובודק..."
+              : "בדוק Candidate → Validator"}
+          </button>
+        </div>
+
+        {bridgeTestResult && (
+          <div
+            className={
+              bridgeTestResult.success
+                ? "scheduling-agent-sandbox-result success"
+                : "scheduling-agent-sandbox-result error"
+            }
+          >
+            {bridgeTestResult.success ? (
+              <>
+                <div>✓ Candidate שנוצר ב-Python הועבר ל-Validator ועבר בדיקה.</div>
+                <div>
+                  שעות: {bridgeTestResult.validation?.statistics?.totalScheduledHours ?? "?"}/
+                  {bridgeTestResult.validation?.statistics?.totalRequiredHours ?? "?"} ·
+                  שגיאות: {bridgeTestResult.validation?.statistics?.errorCount ?? "?"} ·
+                  אזהרות: {bridgeTestResult.validation?.statistics?.warningCount ?? "?"}
+                </div>
+                <div>
+                  Candidate file: {(bridgeTestResult.generatedFile?.bytes ?? 0).toLocaleString()} bytes ·
+                  Python runs: {bridgeTestResult.telemetry?.codeInterpreterCalls ?? 0}
+                </div>
+                {Array.isArray(bridgeTestResult.codeRuns) &&
+                  bridgeTestResult.codeRuns.length > 0 && (
+                    <details>
+                      <summary>הצג Python ו-logs של יצירת ה-Candidate</summary>
+                      {bridgeTestResult.codeRuns.map((run, index) => (
+                        <div key={run.id || index} className="scheduling-agent-sandbox-code-run">
+                          <strong>הרצה {index + 1}</strong>
+                          <pre>{run.code || "(לא הוחזר קוד)"}</pre>
+                          {run.logs && <pre>{run.logs}</pre>}
+                        </div>
+                      ))}
+                    </details>
+                  )}
+              </>
+            ) : (
+              <>
+                <div>✕ {bridgeTestResult.error || "הגשר Candidate → Validator לא עבר את הבדיקה."}</div>
+                {bridgeTestResult.checks && (
+                  <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
+                    {JSON.stringify(bridgeTestResult.checks, null, 2)}
+                  </pre>
+                )}
+                {bridgeTestResult.diagnostic && (
+                  <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
+                    {JSON.stringify(bridgeTestResult.diagnostic, null, 2)}
+                  </pre>
+                )}
+                {Array.isArray(bridgeTestResult.codeRuns) &&
+                  bridgeTestResult.codeRuns.length > 0 && (
+                    <details>
+                      <summary>הצג Python ו-logs לצורך אבחון</summary>
+                      {bridgeTestResult.codeRuns.map((run, index) => (
+                        <div key={run.id || index} className="scheduling-agent-sandbox-code-run">
+                          <pre>{run.code || "(לא הוחזר קוד)"}</pre>
+                          {run.logs && <pre>{run.logs}</pre>}
+                        </div>
+                      ))}
+                    </details>
+                  )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="scheduling-agent-panel scheduling-agent-sandbox-panel">
+        <div className="scheduling-agent-sandbox-header">
+          <div>
+            <strong>Validator failure-injection test v1</strong>
+            <div className="scheduling-agent-sandbox-subtitle">
+              Python מסיר בכוונה שיבוץ רגיל אחד. הצלחה = ה-Validator מזהה את הפגם ומדווח עליו.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={runCandidateValidatorFailureTest}
+            disabled={
+              isFailureTesting ||
+              !agentContext?.schoolData ||
+              !agentContext?.baseSchedule
+            }
+          >
+            {isFailureTesting
+              ? "יוצר Candidate פגום ובודק..."
+              : "בדוק זיהוי כשל מכוון"}
+          </button>
+        </div>
+
+        {failureTestResult && (
+          <div
+            className={
+              failureTestResult.success
+                ? "scheduling-agent-sandbox-result success"
+                : "scheduling-agent-sandbox-result error"
+            }
+          >
+            {failureTestResult.success ? (
+              <>
+                <div>✓ Python יצר פגם מכוון וה-Validator זיהה אותו כמצופה.</div>
+                <div>
+                  שעות לפני: {failureTestResult.beforeValidation?.statistics?.totalScheduledHours ?? "?"}/
+                  {failureTestResult.beforeValidation?.statistics?.totalRequiredHours ?? "?"} ·
+                  אחרי: {failureTestResult.validation?.statistics?.totalScheduledHours ?? "?"}/
+                  {failureTestResult.validation?.statistics?.totalRequiredHours ?? "?"}
+                </div>
+                <div>
+                  חסרות: {failureTestResult.validation?.statistics?.totalMissingHours ?? "?"} ·
+                  שגיאות: {failureTestResult.validation?.statistics?.errorCount ?? "?"} ·
+                  אזהרות: {failureTestResult.validation?.statistics?.warningCount ?? "?"}
+                </div>
+                {failureTestResult.injectedFailure && (
+                  <div>
+                    הוסר: {failureTestResult.injectedFailure.unitId} ·
+                    כיתה {failureTestResult.injectedFailure.className} ·
+                    יום {failureTestResult.injectedFailure.day} ·
+                    שעה {failureTestResult.injectedFailure.hour}
+                  </div>
+                )}
+                {Array.isArray(failureTestResult.validation?.warnings) &&
+                  failureTestResult.validation.warnings.length > 0 && (
+                    <details>
+                      <summary>הצג אזהרות Validator</summary>
+                      <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
+                        {JSON.stringify(failureTestResult.validation.warnings, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                {Array.isArray(failureTestResult.validation?.errors) &&
+                  failureTestResult.validation.errors.length > 0 && (
+                    <details>
+                      <summary>הצג שגיאות Validator</summary>
+                      <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
+                        {JSON.stringify(failureTestResult.validation.errors, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                {Array.isArray(failureTestResult.codeRuns) &&
+                  failureTestResult.codeRuns.length > 0 && (
+                    <details>
+                      <summary>הצג Python ו-logs של יצירת הפגם</summary>
+                      {failureTestResult.codeRuns.map((run, index) => (
+                        <div key={run.id || index} className="scheduling-agent-sandbox-code-run">
+                          <strong>הרצה {index + 1}</strong>
+                          <pre>{run.code || "(לא הוחזר קוד)"}</pre>
+                          {run.logs && <pre>{run.logs}</pre>}
+                        </div>
+                      ))}
+                    </details>
+                  )}
+              </>
+            ) : (
+              <>
+                <div>✕ {failureTestResult.error || "בדיקת הכשל המכוון לא עברה."}</div>
+                {failureTestResult.checks && (
+                  <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
+                    {JSON.stringify(failureTestResult.checks, null, 2)}
+                  </pre>
+                )}
+                {failureTestResult.deltas && (
+                  <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
+                    {JSON.stringify(failureTestResult.deltas, null, 2)}
+                  </pre>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="scheduling-agent-panel scheduling-agent-sandbox-panel">
+        <div className="scheduling-agent-sandbox-header">
+          <div>
+            <strong>Auto-Repair Loop v1.2 — Async</strong>
+            <div className="scheduling-agent-sandbox-subtitle">
+              כל Attempt רץ כ-OpenAI background response. ה-UI מבצע polling קצר ולכן Netlify Function לא נשארת פתוחה בזמן הרצת Python.
+            </div>
+          </div>
+          <button type="button" onClick={runAutoRepairLoopTest} disabled={isAutoRepairTesting || !agentContext?.schoolData || !agentContext?.baseSchedule}>
+            {isAutoRepairTesting
+              ? autoRepairTestResult?.currentPhase?.startsWith("attempt-1")
+                ? `Attempt 1 — ${autoRepairTestResult?.backgroundStatus || "מתקן"}...`
+                : `Attempt 0 — ${autoRepairTestResult?.backgroundStatus || "יוצר פגם"}...`
+              : "בדוק Auto-Repair Loop"}
+          </button>
+        </div>
+        {autoRepairTestResult && (
+          <div className={autoRepairTestResult.success ? "scheduling-agent-sandbox-result success" : "scheduling-agent-sandbox-result error"}>
+            {autoRepairTestResult.success ? (
+              <>
+                <div>✓ הסוכן קיבל דו״ח Validator ותיקן את ה-Candidate באמצעות Python.</div>
+                <div>
+                  ניסיון 0: {autoRepairTestResult.attempts?.[0]?.validation?.statistics?.totalScheduledHours ?? "?"}/{autoRepairTestResult.attempts?.[0]?.validation?.statistics?.totalRequiredHours ?? "?"} ·
+                  ניסיון 1: {autoRepairTestResult.attempts?.[1]?.validation?.statistics?.totalScheduledHours ?? "?"}/{autoRepairTestResult.attempts?.[1]?.validation?.statistics?.totalRequiredHours ?? "?"}
+                </div>
+                <div>
+                  סופי — שגיאות: {autoRepairTestResult.attempts?.[1]?.validation?.statistics?.errorCount ?? "?"} ·
+                  אזהרות: {autoRepairTestResult.attempts?.[1]?.validation?.statistics?.warningCount ?? "?"} ·
+                  חסרות: {autoRepairTestResult.attempts?.[1]?.validation?.statistics?.totalMissingHours ?? "?"}
+                </div>
+                <div>
+                  Python runs — ניסיון 0: {autoRepairTestResult.attempts?.[0]?.codeRuns?.length || 0} ·
+                  ניסיון 1: {autoRepairTestResult.attempts?.[1]?.codeRuns?.length || 0}
+                </div>
+                <div>
+                  Bounded Multi-Step — Attempt 1 Python runs: current {autoRepairTestResult.attempts?.[1]?.codeRuns?.length || 0}
+                </div>
+              </>
+            ) : autoRepairTestResult.running ? (
+              <div>
+                ⏳ {autoRepairTestResult.currentPhase?.startsWith("attempt-1")
+                  ? `Attempt 1 רץ ברקע — ${autoRepairTestResult.backgroundStatus || "queued"}. ה-UI בודק סטטוס בלי להחזיק Function פתוחה.`
+                  : `Attempt 0 רץ ברקע — ${autoRepairTestResult.backgroundStatus || "queued"}. ה-UI בודק סטטוס בלי להחזיק Function פתוחה.`}
+              </div>
+            ) : (
+              <div>✕ {autoRepairTestResult.error || "Auto-Repair Loop לא עבר את הבדיקה."}</div>
+            )}
+            {autoRepairTestResult.checks && <pre style={{ whiteSpace:"pre-wrap", direction:"ltr", textAlign:"left" }}>{JSON.stringify(autoRepairTestResult.checks,null,2)}</pre>}
+            {Array.isArray(autoRepairTestResult.attempts) && autoRepairTestResult.attempts.map((attempt) => (
+              <details key={attempt.number}>
+                <summary>ניסיון {attempt.number} — {attempt.purpose}</summary>
+                {attempt.reply && <div>{attempt.reply}</div>}
+                <pre style={{ whiteSpace:"pre-wrap", direction:"ltr", textAlign:"left" }}>{JSON.stringify(attempt.validation?.statistics || {},null,2)}</pre>
+                {attempt.diagnostics && (
+                  <details>
+                    <summary>Diagnostics</summary>
+                    <pre style={{ whiteSpace:"pre-wrap", direction:"ltr", textAlign:"left" }}>{JSON.stringify(attempt.diagnostics,null,2)}</pre>
+                  </details>
+                )}
+                {(attempt.codeRuns || []).map((run,index) => <div key={run.id || index} className="scheduling-agent-sandbox-code-run"><strong>Python run {index+1}</strong><pre>{run.code || "(לא הוחזר קוד)"}</pre>{run.logs && <pre>{run.logs}</pre>}</div>)}
+              </details>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="scheduling-agent-workspace-controls">
         {!workspace ? (
           <button
@@ -933,23 +2077,145 @@ ${JSON.stringify(
               הוסף חוק
             </button>
 
+            <button
+              type="button"
+              onClick={runRuleCompiler}
+              disabled={isRuleCompiling || rules.length === 0}
+              style={{ marginInlineStart: "8px" }}
+            >
+              {isRuleCompiling
+                ? "מקמפל חוקי־על..."
+                : "Rule Compiler v4.5 — קמפל חוקים"}
+            </button>
+
+            {isRuleCompiling && ruleCompilerPhase && (
+              <div style={{ marginTop: "8px" }}>
+                ⏳ {ruleCompilerPhase}
+              </div>
+            )}
+
+            {ruleCompilerResult && (
+              <div
+                className={
+                  ruleCompilerResult.success
+                    ? "scheduling-agent-sandbox-result success"
+                    : "scheduling-agent-sandbox-result error"
+                }
+                style={{ marginTop: "8px" }}
+              >
+                {ruleCompilerResult.success ? (
+                  <>
+                    <div>
+                      ✓ Rule Compiler עיבד{" "}
+                      {ruleCompilerResult.compiledRules?.length || 0} חוקים.
+                    </div>
+                    <div>
+                      Evaluator נתמך:{" "}
+                      {(ruleCompilerResult.deterministicResults || []).filter(
+                        (item) => item.status !== "unknown"
+                      ).length}
+                      {" "}· פורמלי אך לא נתמך:{" "}
+                      {(ruleCompilerResult.deterministicResults || []).filter(
+                        (item) => item.status === "unknown"
+                      ).length}
+                      {" "}· דורש המשך טיפול:{" "}
+                      {(ruleCompilerResult.compiledRules || []).filter(
+                        (item) => item.formalizationStatus !== "formalized"
+                      ).length}
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    ✕ {ruleCompilerResult.error || "Rule Compiler נכשל"}
+                  </div>
+                )}
+              </div>
+            )}
+
             {rules.length === 0 ? (
               <p>עדיין לא הוגדרו חוקי־על.</p>
             ) : (
               <ul className="scheduling-agent-list">
-                {rules.map((rule) => (
+                {rules.map((rule, index) => (
                   <li
                     key={rule.id}
                     className="scheduling-agent-list-item"
                   >
                     <div className="scheduling-agent-list-content">
                       <div>
+                        <strong>
+                          חוק {rule.ruleNumber || index + 1}
+                        </strong>
+                        {" — "}
                         {rule.originalText}
                       </div>
 
                       <small>
                         סטטוס: {rule.status}
                       </small>
+
+                      <div>
+                        <label>
+                          <small>קטגוריה: </small>
+                          <select
+                            value={rule.category || "unspecified"}
+                            onChange={(event) =>
+                              handleRuleCategoryChange(
+                                rule.id,
+                                event.target.value,
+                              )
+                            }
+                          >
+                            <option value="critical">קריטי</option>
+                            <option value="known_constraint">אילוץ ידוע</option>
+                            <option value="recommended">מומלץ</option>
+                            <option value="unspecified">לא מסווג</option>
+                          </select>
+                          {rule.categorySource === "user" && (
+                            <small> · נקבע ידנית</small>
+                          )}
+                        </label>
+                      </div>
+
+                      {rule.interpretation && (
+                        <div className="scheduling-agent-rule-check">
+                          <div>
+                            <strong>פרשנות:</strong>{" "}
+                            {rule.interpretation}
+                          </div>
+
+                          <div>
+                            <strong>Evaluator:</strong>{" "}
+                            {rule.evaluatorKey || "unsupported"}
+                          </div>
+
+                          {rule.formalRule && (
+                            <details>
+                              <summary>Formal Rule JSON</summary>
+                              <pre
+                                style={{
+                                  whiteSpace: "pre-wrap",
+                                  direction: "ltr",
+                                  textAlign: "left",
+                                }}
+                              >
+                                {JSON.stringify(
+                                  rule.formalRule,
+                                  null,
+                                  2,
+                                )}
+                              </pre>
+                            </details>
+                          )}
+
+                          {rule.clarificationQuestion && (
+                            <div>
+                              <strong>נדרשת הבהרה:</strong>{" "}
+                              {rule.clarificationQuestion}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {rule.checkStatus && (
                         <div className="scheduling-agent-rule-check">
