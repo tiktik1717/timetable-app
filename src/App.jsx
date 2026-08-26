@@ -275,6 +275,13 @@ export default function App() {
     setSchedulingAgentWorkspace,
   ] = useState(null);
 
+  // Incremented whenever project-level agent data is restored. Using this as
+  // a React key forces SchedulingAgentView to remount, so no stale internal UI
+  // state can hide freshly loaded rules.
+  const [schedulingAgentProjectRevision, setSchedulingAgentProjectRevision] =
+    useState(0);
+  const schedulingAgentRestoreTokenRef = useRef(0);
+
   function startSchedulingAgentWorkspace() {
     const workspace =
       createAgentWorkspace(schedule);
@@ -708,18 +715,32 @@ export default function App() {
 
   function restoreSchedulingAgentProjectData(projectData) {
     const agentData = projectData?.schedulingAgent || {};
-    const nextRules = Array.isArray(agentData.rules) ? agentData.rules : [];
+
+    // Clone the project data before putting it in React state. This keeps the
+    // loaded project object and the live editor state fully independent.
+    const nextRules = Array.isArray(agentData.rules)
+      ? structuredClone(agentData.rules)
+      : [];
     const nextApprovedExceptions = Array.isArray(agentData.approvedExceptions)
-      ? agentData.approvedExceptions
+      ? structuredClone(agentData.approvedExceptions)
       : [];
 
-    setSchedulingAgentRules(nextRules);
-    setSchedulingAgentApprovedExceptions(nextApprovedExceptions);
+    const restoreToken = ++schedulingAgentRestoreTokenRef.current;
 
-    // The regular scheduling-agent persistence effect will also write this,
-    // but writing immediately prevents stale rules if the page is refreshed
-    // before that effect runs. Preserve chat messages because they are not
-    // part of a project file.
+    const applyAgentProjectData = () => {
+      // Ignore a delayed restore if a newer project has already been loaded.
+      if (restoreToken !== schedulingAgentRestoreTokenRef.current) return;
+
+      setSchedulingAgentRules(nextRules);
+      setSchedulingAgentApprovedExceptions(nextApprovedExceptions);
+    };
+
+    applyAgentProjectData();
+    setSchedulingAgentProjectRevision((value) => value + 1);
+
+    // Persist immediately as well as through the normal React effect.
+    // Preserve chat messages because they intentionally do not belong to a
+    // project file.
     try {
       const savedWorkspace = JSON.parse(
         localStorage.getItem(SCHEDULING_AGENT_STORAGE_KEY) || "{}",
@@ -737,6 +758,22 @@ export default function App() {
     } catch (error) {
       console.error("Failed to restore scheduling agent project data:", error);
     }
+
+    // Re-assert once after the rest of the project load has committed. This
+    // protects against schedule/cloud effects that may run during the same
+    // load cycle and previously could leave the UI with an empty rule list.
+    setTimeout(applyAgentProjectData, 0);
+
+    console.log("SCHEDULING AGENT PROJECT DATA RESTORED", {
+      rules: nextRules.length,
+      approvedExceptions: nextApprovedExceptions.length,
+      restoreToken,
+    });
+
+    return {
+      rules: nextRules.length,
+      approvedExceptions: nextApprovedExceptions.length,
+    };
   }
 
   function buildProjectData() {
@@ -2657,12 +2694,20 @@ export default function App() {
         projectData.schoolData,
       );
 
+      // A file loaded from disk is a standalone project. Do not keep it tied
+      // to a previously selected cloud project, because an automatic cloud
+      // load/save can otherwise overwrite the freshly restored agent rules.
+      setSelectedCloudProjectId("");
+      loadedCloudProjectIdRef.current = null;
+      localStorage.removeItem("selectedCloudProjectId");
+      setHasUnsavedCloudChanges(false);
+
       setSchoolData(normalizedSchoolData);
       setSchedule(projectData.schedule || {});
       setTeacherHighlights(
         normalizeTeacherHighlights(projectData.teacherHighlights),
       );
-      restoreSchedulingAgentProjectData(projectData);
+      const restoredAgent = restoreSchedulingAgentProjectData(projectData);
 
       setCheckpoints(projectData.checkpoints || []);
       setCurrentCheckpointId(
@@ -2701,7 +2746,9 @@ export default function App() {
         projectData.comparisonCheckpointId || "",
       );
 
-      alert("הפרויקט נטען בהצלחה");
+      alert(
+        `הפרויקט נטען בהצלחה. חוקי־על ששוחזרו: ${restoredAgent.rules}`,
+      );
     } catch (error) {
       console.error(error);
       alert("טעינת הפרויקט נכשלה: " + error.message);
@@ -6028,6 +6075,7 @@ export default function App() {
 
         {activeView === "schedulingAgent" && (
           <SchedulingAgentView
+            key={`scheduling-agent-${schedulingAgentProjectRevision}`}
             agentContext={schedulingAgentContext}
             validationReport={schedulingAgentValidationReport}
             rules={schedulingAgentRules}
