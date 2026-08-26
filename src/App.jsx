@@ -909,7 +909,15 @@ export default function App() {
       localStorage.setItem("selectedCloudProjectId", projectId);
 
       if (showAlert) {
-        alert(`הפרויקט "${data.name}" נטען מהענן2`);
+        const restoredRulesCount = Array.isArray(
+          projectData?.schedulingAgent?.rules,
+        )
+          ? projectData.schedulingAgent.rules.length
+          : 0;
+
+        alert(
+          `הפרויקט "${data.name}" נטען מהענן. חוקי־על ששוחזרו: ${restoredRulesCount}`,
+        );
       }
       return true;
     } finally {
@@ -1050,8 +1058,17 @@ export default function App() {
       return;
     }
 
-    alert("הפרויקט נשמר בענן");
+    // The cloud payload is produced by buildProjectData(), so it includes the
+    // Scheduling Agent rules and approved exceptions as part of the project.
     setSelectedCloudProjectId(data.id);
+    loadedCloudProjectIdRef.current = data.id;
+    localStorage.setItem("selectedCloudProjectId", data.id);
+    setHasUnsavedCloudChanges(false);
+    setLastCloudSavedAt(new Date().toLocaleTimeString("he-IL"));
+
+    alert(
+      `הפרויקט נשמר בענן. חוקי־על שנשמרו: ${schedulingAgentRules.length}`,
+    );
     await loadCloudProjects();
   }
 
@@ -1098,7 +1115,9 @@ export default function App() {
       return;
     }
 
-    alert("הפרויקט עודכן בענן");
+    alert(
+      `הפרויקט עודכן בענן. חוקי־על שנשמרו: ${schedulingAgentRules.length}`,
+    );
     setHasUnsavedCloudChanges(false);
     setLastCloudSavedAt(new Date().toLocaleTimeString("he-IL"));
     await loadCloudProjects();
