@@ -259,6 +259,8 @@ FILTER:
 - שעת סיום קבועה של כיתות => class_end_hour.
 - "כל הכיתות בשכבה מסיימות באותה שעה" => class_end_hour עם assert.op="all_equal" (לא eq 1!).
 - דפוסים על ימים, כולל יום חופשי, מספר שעות, התחלה, רצף או חלונות => teacher_days/class_days + aggregate.
+- ב-source teacher_days, השדה count הוא מספר שעות-מערכת ייחודיות שבהן המורה עובד באותו יום (distinct timetable hour slots), ולא מספר רשומות placement. כמה יחידות/קבוצות של אותו מורה באותה שעה נספרות כשעה אחת.
+- rawPlacementCount קיים רק לצורכי אבחון ואינו מייצג את מספר שעות העבודה של המורה.
 - כדי לספור כמה ימים מקיימים תנאי, השתמש aggregate על teacher_days/class_days עם metric count_where.
 - מורה שאינו מחנך הכיתה המסוימת: placements filter isHomeroomForClass eq false; groupBy teacherId,className,day.
 - אם החוק אומר "בכיתה" ומחריג ישיבות צוות, בצע semantic entity resolution מול ENTITIES.constraintGroups: זהה לפי שמות הקבוצות אילו קבוצות מייצגות בבירור ישיבת/צוות/הדרכת צוות, והחרג את ה-constraintGroupId שלהן. אין צורך בהתאמה מילולית מדויקת למונח שבחוק. אם יש קבוצות שמן הסתם אינן ישיבות צוות, אל תחריג אותן. בקש clarification רק אם קיימת קבוצה ששמה/תפקידה באמת דו-משמעי ומשנה את תוצאת החוק.

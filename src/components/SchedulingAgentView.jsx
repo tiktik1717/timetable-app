@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { solveWithAgent } from "../scheduling/agentSolver";
+import {
+  solveWithAgent,
+} from "../scheduling/agentSolver";
 import {
   evaluateFormalRules,
   formalRuleEvaluationsToRuleCheckResults,
@@ -54,14 +56,24 @@ export default function SchedulingAgentView({
 
     setAgentTelemetry((prev) => ({
       calls: prev.calls + 1,
-      inputTokens: prev.inputTokens + (Number(telemetry.inputTokens) || 0),
-      outputTokens: prev.outputTokens + (Number(telemetry.outputTokens) || 0),
-      totalTokens: prev.totalTokens + (Number(telemetry.totalTokens) || 0),
+      inputTokens:
+        prev.inputTokens +
+        (Number(telemetry.inputTokens) || 0),
+      outputTokens:
+        prev.outputTokens +
+        (Number(telemetry.outputTokens) || 0),
+      totalTokens:
+        prev.totalTokens +
+        (Number(telemetry.totalTokens) || 0),
       totalDurationMs:
-        prev.totalDurationMs + (Number(telemetry.durationMs) || 0),
-      lastModel: telemetry.model || prev.lastModel,
-      lastContextChars: Number(telemetry.contextChars) || 0,
-      lastContextProfile: telemetry.contextProfile || null,
+        prev.totalDurationMs +
+        (Number(telemetry.durationMs) || 0),
+      lastModel:
+        telemetry.model || prev.lastModel,
+      lastContextChars:
+        Number(telemetry.contextChars) || 0,
+      lastContextProfile:
+        telemetry.contextProfile || null,
     }));
   }
 
@@ -80,11 +92,17 @@ export default function SchedulingAgentView({
 
     return {
       evaluations,
-      ruleCheckResults: formalRuleEvaluationsToRuleCheckResults(evaluations),
+      ruleCheckResults:
+        formalRuleEvaluationsToRuleCheckResults(
+          evaluations,
+        ),
     };
   }
 
-  function mergeRuleCheckResults(agentResults = [], deterministicResults = []) {
+  function mergeRuleCheckResults(
+    agentResults = [],
+    deterministicResults = [],
+  ) {
     const merged = new Map();
 
     for (const result of agentResults || []) {
@@ -120,11 +138,14 @@ export default function SchedulingAgentView({
     setSandboxTestResult(null);
 
     try {
-      const response = await fetch("/.netlify/functions/python-sandbox-test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ schoolData }),
-      });
+      const response = await fetch(
+        "/.netlify/functions/python-sandbox-test",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ schoolData }),
+        },
+      );
 
       const data = await response.json();
       if (!response.ok) {
@@ -178,7 +199,9 @@ export default function SchedulingAgentView({
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data?.error || "בדיקת Candidate → Validator נכשלה");
+        throw new Error(
+          data?.error || "בדיקת Candidate → Validator נכשלה",
+        );
       }
 
       setBridgeTestResult(data);
@@ -187,7 +210,9 @@ export default function SchedulingAgentView({
       console.error("Candidate -> Validator bridge test failed:", error);
       setBridgeTestResult({
         success: false,
-        error: error?.message || "שגיאה לא ידועה בבדיקת Candidate → Validator",
+        error:
+          error?.message ||
+          "שגיאה לא ידועה בבדיקת Candidate → Validator",
       });
     } finally {
       setIsBridgeTesting(false);
@@ -227,7 +252,9 @@ export default function SchedulingAgentView({
 
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data?.error || "בדיקת הכשל המכוון נכשלה");
+        throw new Error(
+          data?.error || "בדיקת הכשל המכוון נכשלה",
+        );
       }
 
       setFailureTestResult(data);
@@ -236,7 +263,9 @@ export default function SchedulingAgentView({
       console.error("Candidate failure-injection test failed:", error);
       setFailureTestResult({
         success: false,
-        error: error?.message || "שגיאה לא ידועה בבדיקת הכשל המכוון",
+        error:
+          error?.message ||
+          "שגיאה לא ידועה בבדיקת הכשל המכוון",
       });
     } finally {
       setIsFailureTesting(false);
@@ -390,10 +419,7 @@ export default function SchedulingAgentView({
           }),
         },
       );
-      const data0 = await parseJsonResponse(
-        collect0Response,
-        "Attempt 0 collect",
-      );
+      const data0 = await parseJsonResponse(collect0Response, "Attempt 0 collect");
       attempt0InputFileIds = [];
       recordTelemetry(data0.telemetry);
 
@@ -479,10 +505,7 @@ export default function SchedulingAgentView({
           }),
         },
       );
-      const data1 = await parseJsonResponse(
-        collect1Response,
-        "Attempt 1 collect",
-      );
+      const data1 = await parseJsonResponse(collect1Response, "Attempt 1 collect");
       attempt1InputFileIds = [];
       if (!collect1Response.ok) {
         throw new Error(data1?.error || "Attempt 1 collect נכשל");
@@ -500,9 +523,7 @@ export default function SchedulingAgentView({
 
       setAutoRepairTestResult({
         success: Boolean(data1.success),
-        error: data1.success
-          ? null
-          : data1.error || "Attempt 1 לא עבר את בדיקת התיקון",
+        error: data1.success ? null : (data1.error || "Attempt 1 לא עבר את בדיקת התיקון"),
         running: false,
         currentPhase: "done",
         backgroundStatus: "completed",
@@ -534,7 +555,8 @@ export default function SchedulingAgentView({
         success: false,
         running: false,
         error:
-          error?.message || "שגיאה לא ידועה בבדיקת Auto-Repair האסינכרונית",
+          error?.message ||
+          "שגיאה לא ידועה בבדיקת Auto-Repair האסינכרונית",
       }));
     } finally {
       // If an attempt failed before its collect endpoint, uploaded OpenAI files
@@ -556,39 +578,64 @@ export default function SchedulingAgentView({
     };
   }
 
-  async function runAgentSolver(initialAction) {
-    const initialWorkspace = workspace || onStartWorkspace?.();
+  async function runAgentSolver(
+    initialAction
+  ) {
+    const initialWorkspace =
+      workspace ||
+      onStartWorkspace?.();
 
-    if (!initialWorkspace || !onTryWorkspaceMovePure) {
+    if (
+      !initialWorkspace ||
+      !onTryWorkspaceMovePure
+    ) {
       return null;
     }
 
-    const result = await solveWithAgent({
-      initialAction,
+    const result =
+      await solveWithAgent({
+        initialAction,
 
-      workspace: initialWorkspace,
+        workspace:
+          initialWorkspace,
 
-      tryWorkspaceMove: onTryWorkspaceMovePure,
+        tryWorkspaceMove:
+          onTryWorkspaceMovePure,
 
-      evaluateAttempt: async ({ attemptedAction, attemptResult }) => {
-        return await askAgentToEvaluateAttempt({
-          attemptedAction,
-          attemptResult,
-        });
-      },
-    });
+        evaluateAttempt:
+          async ({
+            attemptedAction,
+            attemptResult,
+          }) => {
+            return await askAgentToEvaluateAttempt({
+              attemptedAction,
+              attemptResult,
+            });
+          },
+      });
 
-    console.log("AGENT SOLVER RESULT:", result);
+    console.log(
+      "AGENT SOLVER RESULT:",
+      result
+    );
 
     return result;
   }
 
-  function buildTeacherScheduleSummary(scheduleOverride = null) {
-    const schedule = scheduleOverride || agentContext?.baseSchedule || {};
+  function buildTeacherScheduleSummary(
+    scheduleOverride = null
+  ) {
+    const schedule =
+      scheduleOverride ||
+      agentContext?.baseSchedule ||
+      {};
 
-    const units = agentContext?.schoolData?.teachingUnits || [];
+    const units =
+      agentContext?.schoolData?.teachingUnits || [];
 
-    const byUnitId = new Map(units.map((unit) => [unit.id, unit]));
+    const byUnitId = new Map(
+      units.map((unit) => [unit.id, unit])
+    );
 
     // Compact wire format. Teacher names are already present in entitySummary,
     // so the schedule snapshot sends only placements. This removes thousands
@@ -597,12 +644,8 @@ export default function SchedulingAgentView({
     const byTeacher = {};
 
     for (const [day, daySchedule] of Object.entries(schedule)) {
-      for (const [className, classSchedule] of Object.entries(
-        daySchedule || {},
-      )) {
-        for (const [hourKey, cellValue] of Object.entries(
-          classSchedule || {},
-        )) {
+      for (const [className, classSchedule] of Object.entries(daySchedule || {})) {
+        for (const [hourKey, cellValue] of Object.entries(classSchedule || {})) {
           const hour = Number(hourKey);
           const unitIds = Array.isArray(cellValue)
             ? cellValue
@@ -619,7 +662,12 @@ export default function SchedulingAgentView({
               byTeacher[teacherId] = [];
             }
 
-            byTeacher[teacherId].push([day, hour, className, unitId]);
+            byTeacher[teacherId].push([
+              day,
+              hour,
+              className,
+              unitId,
+            ]);
           }
         }
       }
@@ -630,9 +678,7 @@ export default function SchedulingAgentView({
         const dayOrder =
           (agentContext?.schoolData?.days || []).indexOf(a[0]) -
           (agentContext?.schoolData?.days || []).indexOf(b[0]);
-        return (
-          dayOrder || a[1] - b[1] || String(a[2]).localeCompare(String(b[2]))
-        );
+        return dayOrder || a[1] - b[1] || String(a[2]).localeCompare(String(b[2]));
       });
     }
 
@@ -643,41 +689,61 @@ export default function SchedulingAgentView({
     };
   }
 
-  async function askAgentToEvaluateAttempt({ attemptedAction, attemptResult }) {
-    const workspaceSchedule = attemptResult?.workspace?.workingSchedule;
+  async function askAgentToEvaluateAttempt({
+    attemptedAction,
+    attemptResult,
+  }) {
+    const workspaceSchedule =
+      attemptResult?.workspace
+        ?.workingSchedule;
 
     const workspaceTeacherSummary =
-      buildTeacherScheduleSummary(workspaceSchedule);
+      buildTeacherScheduleSummary(
+        workspaceSchedule
+      );
 
     const deterministicRules =
-      buildDeterministicRuleCheckResults(workspaceSchedule);
+      buildDeterministicRuleCheckResults(
+        workspaceSchedule,
+      );
 
-    const response = await fetch("/.netlify/functions/scheduling-agent", {
-      method: "POST",
+    const response = await fetch(
+      "/.netlify/functions/scheduling-agent",
+      {
+        method: "POST",
 
-      headers: {
-        "Content-Type": "application/json",
-      },
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
 
-      body: JSON.stringify({
-        message: `
+        body: JSON.stringify({
+          message: `
 בוצע עכשיו ניסיון אוטומטי בתוך Agent Workspace.
 
 הפעולה שנוסתה:
-${JSON.stringify(attemptedAction, null, 2)}
+${JSON.stringify(
+            attemptedAction,
+            null,
+            2
+          )}
 
 תוצאת הניסיון:
 ${JSON.stringify(
-  {
-    success: attemptResult.success,
+            {
+              success:
+                attemptResult.success,
 
-    error: attemptResult.error,
+              error:
+                attemptResult.error,
 
-    validationComparison: attemptResult.validationComparison,
-  },
-  null,
-  2,
-)}
+              validationComparison:
+                attemptResult
+                  .validationComparison,
+            },
+            null,
+            2
+          )}
 
 זו אינה המערכת האמיתית אלא working schedule זמני.
 
@@ -690,40 +756,58 @@ ${JSON.stringify(
 דווח שהמועמד מתאים להמשך בדיקה.
         `,
 
-        conversationHistory: messages || [],
+          conversationHistory:
+            messages || [],
 
-        validationSummary: attemptResult?.validationReport || {},
+          validationSummary:
+            attemptResult
+              ?.validationReport || {},
 
-        entitySummary: {
-          teachers:
-            agentContext?.schoolData?.teachers?.map((teacher) => ({
-              id: teacher.id,
-              name: teacher.name,
-            })) || [],
+          entitySummary: {
+            teachers:
+              agentContext?.schoolData
+                ?.teachers?.map(
+                  (teacher) => ({
+                    id: teacher.id,
+                    name: teacher.name,
+                  })
+                ) || [],
 
-          classes: agentContext?.schoolData?.classes || [],
+            classes:
+              agentContext?.schoolData
+                ?.classes || [],
 
-          meetings:
-            agentContext?.schoolData?.meetings?.map((meeting) => ({
-              id: meeting.id,
-              name: meeting.name,
-            })) || [],
-        },
+            meetings:
+              agentContext?.schoolData
+                ?.meetings?.map(
+                  (meeting) => ({
+                    id: meeting.id,
+                    name: meeting.name,
+                  })
+                ) || [],
+          },
 
-        teacherScheduleSummary: workspaceTeacherSummary,
+          teacherScheduleSummary:
+            workspaceTeacherSummary,
 
-        rules: rules || [],
+          rules: rules || [],
 
-        approvedExceptions: approvedExceptions || [],
+          approvedExceptions:
+            approvedExceptions || [],
 
-        formalRuleEvaluations: deterministicRules.evaluations,
-      }),
-    });
+          formalRuleEvaluations:
+            deterministicRules.evaluations,
+        }),
+      }
+    );
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data?.error || "שגיאה בבדיקת ניסיון הסוכן");
+      throw new Error(
+        data?.error ||
+        "שגיאה בבדיקת ניסיון הסוכן"
+      );
     }
 
     recordTelemetry(data.telemetry);
@@ -747,9 +831,11 @@ ${JSON.stringify(
     // בדיקה זמנית:
     // בניית תקציר מערכת השעות לפי מורים.
     // בשלב זה עדיין לא שולחים אותו לסוכן.
-    const teacherScheduleSummary = buildTeacherScheduleSummary();
+    const teacherScheduleSummary =
+      buildTeacherScheduleSummary();
 
-    const deterministicRules = buildDeterministicRuleCheckResults();
+    const deterministicRules =
+      buildDeterministicRuleCheckResults();
 
     const userMessage = {
       id: `user-${Date.now()}`,
@@ -760,81 +846,112 @@ ${JSON.stringify(
       actions: [],
     };
 
-    onMessagesChange((prev) => [...prev, userMessage]);
+    onMessagesChange((prev) => [
+      ...prev,
+      userMessage,
+    ]);
 
     setInput("");
     setIsAgentThinking(true);
 
     try {
-      const response = await fetch("/.netlify/functions/scheduling-agent", {
-        method: "POST",
+      const response = await fetch(
+        "/.netlify/functions/scheduling-agent",
+        {
+          method: "POST",
 
-        headers: {
-          "Content-Type": "application/json",
-        },
-
-        body: JSON.stringify({
-          message: text,
-
-          conversationHistory: [...(messages || []), userMessage],
-
-          validationSummary: {
-            statistics: validationReport?.statistics || {},
-
-            errors: validationReport?.errors || [],
-
-            warnings: validationReport?.warnings || [],
+          headers: {
+            "Content-Type": "application/json",
           },
 
-          entitySummary: {
-            teachers:
-              agentContext?.schoolData?.teachers?.map((teacher) => ({
-                id: teacher.id,
-                name: teacher.name,
-              })) || [],
+          body: JSON.stringify({
+            message: text,
 
-            classes: agentContext?.schoolData?.classes || [],
+            conversationHistory: [
+              ...(messages || []),
+              userMessage,
+            ],
 
-            meetings:
-              agentContext?.schoolData?.meetings?.map((meeting) => ({
-                id: meeting.id,
-                name: meeting.name,
-              })) || [],
-          },
+            validationSummary: {
+              statistics:
+                validationReport?.statistics || {},
 
-          teacherScheduleSummary,
+              errors:
+                validationReport?.errors || [],
 
-          rules: rules || [],
+              warnings:
+                validationReport?.warnings || [],
+            },
 
-          approvedExceptions: approvedExceptions || [],
+            entitySummary: {
+              teachers:
+                agentContext?.schoolData?.teachers?.map(
+                  (teacher) => ({
+                    id: teacher.id,
+                    name: teacher.name,
+                  })
+                ) || [],
 
-          formalRuleEvaluations: deterministicRules.evaluations,
-        }),
-      });
+              classes:
+                agentContext?.schoolData?.classes || [],
+
+              meetings:
+                agentContext?.schoolData?.meetings?.map(
+                  (meeting) => ({
+                    id: meeting.id,
+                    name: meeting.name,
+                  })
+                ) || [],
+            },
+
+            teacherScheduleSummary,
+
+            rules: rules || [],
+
+            approvedExceptions:
+              approvedExceptions || [],
+
+            formalRuleEvaluations:
+              deterministicRules.evaluations,
+          }),
+        }
+      );
 
       const data = await response.json();
 
-      console.log("Scheduling agent proposed action:", data.proposedAction);
+      console.log(
+        "Scheduling agent proposed action:",
+        data.proposedAction
+      );
 
       if (!response.ok) {
-        throw new Error(data?.error || "שגיאה בתקשורת עם סוכן השיבוץ");
+        throw new Error(
+          data?.error ||
+          "שגיאה בתקשורת עם סוכן השיבוץ"
+        );
       }
 
       recordTelemetry(data.telemetry);
 
-      let proposedAction = data.proposedAction;
+      let proposedAction =
+        data.proposedAction;
 
-      const ruleCheckResults = mergeRuleCheckResults(
-        Array.isArray(data.ruleCheckResults) ? data.ruleCheckResults : [],
-        deterministicRules.ruleCheckResults,
-      );
+      const ruleCheckResults =
+        mergeRuleCheckResults(
+          Array.isArray(data.ruleCheckResults)
+            ? data.ruleCheckResults
+            : [],
+          deterministicRules.ruleCheckResults,
+        );
 
       if (ruleCheckResults.length > 0) {
         onRulesChange((prev) =>
           prev.map((rule) => {
-            const result = ruleCheckResults.find(
-              (item) => item.ruleId === rule.id,
-            );
+            const result =
+              ruleCheckResults.find(
+                (item) =>
+                  item.ruleId === rule.id
+              );
 
             if (!result) {
               return rule;
@@ -843,83 +960,120 @@ ${JSON.stringify(
             return {
               ...rule,
 
-              checkStatus: result.status,
+              checkStatus:
+                result.status,
 
-              checkSummary: result.summary,
+              checkSummary:
+                result.summary,
 
-              checkViolations: result.violations || [],
+              checkViolations:
+                result.violations || [],
 
-              checkedAt: new Date().toISOString(),
+              checkedAt:
+                new Date().toISOString(),
             };
-          }),
+          })
         );
       }
 
       if (
-        proposedAction?.type === "proposeScheduleMove" &&
+        proposedAction?.type ===
+        "proposeScheduleMove" &&
         onTryWorkspaceMove
       ) {
-        const attemptResult = onTryWorkspaceMove(proposedAction);
+        const attemptResult =
+          onTryWorkspaceMove(
+            proposedAction
+          );
 
         proposedAction = {
           ...proposedAction,
 
           simulation: {
-            success: attemptResult.success,
+            success:
+              attemptResult.success,
 
-            error: attemptResult.error || null,
+            error:
+              attemptResult.error || null,
 
             validationStatistics:
-              attemptResult.validationReport?.statistics || null,
+              attemptResult
+                .validationReport
+                ?.statistics || null,
 
-            validationErrors: attemptResult.validationReport?.errors || [],
+            validationErrors:
+              attemptResult
+                .validationReport
+                ?.errors || [],
 
-            validationComparison: attemptResult.validationComparison || null,
+            validationComparison:
+              attemptResult
+                .validationComparison ||
+              null,
 
             workspaceAttemptCount:
-              attemptResult.workspace?.attempts?.length || 0,
+              attemptResult.workspace
+                ?.attempts?.length || 0,
           },
         };
-        const evaluationData = await askAgentToEvaluateAttempt({
-          attemptedAction: proposedAction,
+        const evaluationData =
+          await askAgentToEvaluateAttempt({
+            attemptedAction:
+              proposedAction,
 
-          attemptResult,
-        });
+            attemptResult,
+          });
 
-        console.log("AGENT ATTEMPT EVALUATION:", evaluationData);
+        console.log(
+          "AGENT ATTEMPT EVALUATION:",
+          evaluationData
+        );
       }
 
       const agentMessage = {
         id: `agent-${Date.now()}`,
         role: "agent",
         type: "message",
-        text: data.reply || "הסוכן לא החזיר תשובה.",
+        text:
+          data.reply ||
+          "הסוכן לא החזיר תשובה.",
         createdAt: new Date().toISOString(),
 
         actions: proposedAction
           ? [
-              {
-                ...proposedAction,
-                status: "pending",
-              },
-            ]
+            {
+              ...proposedAction,
+              status: "pending",
+            },
+          ]
           : [],
       };
 
-      onMessagesChange((prev) => [...prev, agentMessage]);
+      onMessagesChange((prev) => [
+        ...prev,
+        agentMessage,
+      ]);
     } catch (error) {
-      console.error("Scheduling agent request failed:", error);
+      console.error(
+        "Scheduling agent request failed:",
+        error
+      );
 
       const errorMessage = {
         id: `agent-error-${Date.now()}`,
         role: "agent",
         type: "error",
-        text: "לא הצלחתי ליצור קשר עם סוכן השיבוץ. " + (error?.message || ""),
+        text:
+          "לא הצלחתי ליצור קשר עם סוכן השיבוץ. " +
+          (error?.message || ""),
         createdAt: new Date().toISOString(),
         actions: [],
       };
 
-      onMessagesChange((prev) => [...prev, errorMessage]);
+      onMessagesChange((prev) => [
+        ...prev,
+        errorMessage,
+      ]);
     } finally {
       setIsAgentThinking(false);
     }
@@ -994,7 +1148,8 @@ ${JSON.stringify(
 
       if (!startResponse.ok || !startData?.success) {
         throw new Error(
-          startData?.error || "Rule Compiler v4.5 לא הצליח להתחיל",
+          startData?.error ||
+            "Rule Compiler v4.5 לא הצליח להתחיל",
         );
       }
 
@@ -1002,17 +1157,27 @@ ${JSON.stringify(
       const startedAt = Date.now();
 
       if (!responseId) {
-        throw new Error("Rule Compiler v4.5 לא החזיר responseId");
+        throw new Error(
+          "Rule Compiler v4.5 לא החזיר responseId",
+        );
       }
 
       let data = null;
       const maxPolls = 60;
       const pollDelayMs = 3000;
 
-      for (let pollIndex = 0; pollIndex < maxPolls; pollIndex += 1) {
-        setRuleCompilerPhase(`ממתין לתוצאת Rule Compiler... ${pollIndex + 1}`);
+      for (
+        let pollIndex = 0;
+        pollIndex < maxPolls;
+        pollIndex += 1
+      ) {
+        setRuleCompilerPhase(
+          `ממתין לתוצאת Rule Compiler... ${pollIndex + 1}`,
+        );
 
-        await new Promise((resolve) => setTimeout(resolve, pollDelayMs));
+        await new Promise((resolve) =>
+          setTimeout(resolve, pollDelayMs)
+        );
 
         const collectResponse = await fetch(
           "/.netlify/functions/rule-compiler-async-collect",
@@ -1028,14 +1193,19 @@ ${JSON.stringify(
           },
         );
 
-        const collectData = await parseJsonResponse(
-          collectResponse,
-          "Rule Compiler v4.5 collect",
-        );
+        const collectData =
+          await parseJsonResponse(
+            collectResponse,
+            "Rule Compiler v4.5 collect",
+          );
 
-        if (!collectResponse.ok || collectData?.success === false) {
+        if (
+          !collectResponse.ok ||
+          collectData?.success === false
+        ) {
           throw new Error(
-            collectData?.error || "Rule Compiler v4.5 נכשל בזמן איסוף התוצאה",
+            collectData?.error ||
+              "Rule Compiler v4.5 נכשל בזמן איסוף התוצאה",
           );
         }
 
@@ -1046,16 +1216,23 @@ ${JSON.stringify(
       }
 
       if (!data?.completed) {
-        throw new Error("Rule Compiler v4.5 לא הסתיים בתוך 3 דקות");
+        throw new Error(
+          "Rule Compiler v4.5 לא הסתיים בתוך 3 דקות",
+        );
       }
 
-      const numberedRules = (rules || []).map((rule, index) => ({
-        ...rule,
-        ruleNumber: rule.ruleNumber || index + 1,
-      }));
+      const numberedRules = (rules || []).map(
+        (rule, index) => ({
+          ...rule,
+          ruleNumber: rule.ruleNumber || index + 1,
+        }),
+      );
 
       const compiledById = new Map(
-        (data.compiledRules || []).map((item) => [item.ruleId, item]),
+        (data.compiledRules || []).map((item) => [
+          item.ruleId,
+          item,
+        ]),
       );
 
       const nextRules = numberedRules.map((rule) => {
@@ -1068,12 +1245,15 @@ ${JSON.stringify(
           compiled.formalRuleJson
         ) {
           try {
-            formalRule = JSON.parse(compiled.formalRuleJson);
-
-            formalRule.severity = applyDeterministicCategoryGuard(
-              rule,
-              compiled.category,
+            formalRule = JSON.parse(
+              compiled.formalRuleJson,
             );
+
+            formalRule.severity =
+              applyDeterministicCategoryGuard(
+                rule,
+                compiled.category,
+              );
           } catch (error) {
             console.error(
               "Rule Compiler returned invalid formalRuleJson:",
@@ -1084,7 +1264,11 @@ ${JSON.stringify(
 
         return {
           ...rule,
-          category: applyDeterministicCategoryGuard(rule, compiled.category),
+          category:
+            applyDeterministicCategoryGuard(
+              rule,
+              compiled.category,
+            ),
           severityMode:
             rule.severityMode === "manual" || rule.categorySource === "user"
               ? "manual"
@@ -1096,10 +1280,14 @@ ${JSON.stringify(
           status: compiled.formalizationStatus,
           interpretation: compiled.interpretation,
           formalRule,
-          evaluatorKey: compiled.evaluatorKey || "unsupported",
-          resolvedEntities: compiled.resolvedEntities || [],
-          clarificationQuestion: compiled.clarificationQuestion || null,
-          compilerExplanation: compiled.explanation || "",
+          evaluatorKey:
+            compiled.evaluatorKey || "unsupported",
+          resolvedEntities:
+            compiled.resolvedEntities || [],
+          clarificationQuestion:
+            compiled.clarificationQuestion || null,
+          compilerExplanation:
+            compiled.explanation || "",
           compiledAt: new Date().toISOString(),
           compilerVersion: "rule-compiler-v4.2-generic",
         };
@@ -1108,12 +1296,16 @@ ${JSON.stringify(
       const evaluations = evaluateFormalRules({
         rules: nextRules,
         schedule:
-          workspace?.workingSchedule || agentContext?.baseSchedule || {},
+          workspace?.workingSchedule ||
+          agentContext?.baseSchedule ||
+          {},
         schoolData: agentContext?.schoolData || {},
       });
 
       const deterministicResults =
-        formalRuleEvaluationsToRuleCheckResults(evaluations);
+        formalRuleEvaluationsToRuleCheckResults(
+          evaluations,
+        );
 
       const evaluatedRules = nextRules.map((rule) => {
         const result = deterministicResults.find(
@@ -1124,7 +1316,8 @@ ${JSON.stringify(
 
         return {
           ...rule,
-          evaluatorSupported: result.status !== "unknown",
+          evaluatorSupported:
+            result.status !== "unknown",
           checkStatus: result.status,
           checkSummary: result.summary,
           checkViolations: result.violations || [],
@@ -1144,7 +1337,9 @@ ${JSON.stringify(
       console.error("Rule Compiler v4.5 failed:", error);
       setRuleCompilerResult({
         success: false,
-        error: error?.message || "שגיאה לא ידועה ב-Rule Compiler v4.5",
+        error:
+          error?.message ||
+          "שגיאה לא ידועה ב-Rule Compiler v4.5",
       });
     } finally {
       setIsRuleCompiling(false);
@@ -1162,7 +1357,10 @@ ${JSON.stringify(
     const nextRuleNumber =
       (rules || []).reduce(
         (max, rule, index) =>
-          Math.max(max, Number(rule.ruleNumber) || index + 1),
+          Math.max(
+            max,
+            Number(rule.ruleNumber) || index + 1,
+          ),
         0,
       ) + 1;
 
@@ -1185,7 +1383,10 @@ ${JSON.stringify(
   }
 
   function handleApproveAction(messageId, action) {
-    if (action.type === "approveMeetingParticipantException") {
+    if (
+      action.type ===
+      "approveMeetingParticipantException"
+    ) {
       const newException = {
         type: "meetingParticipant",
         meetingId: action.meetingId,
@@ -1195,9 +1396,12 @@ ${JSON.stringify(
       onApprovedExceptionsChange((prev) => {
         const alreadyExists = prev.some(
           (exception) =>
-            exception.type === newException.type &&
-            exception.meetingId === newException.meetingId &&
-            String(exception.teacherId) === newException.teacherId,
+            exception.type ===
+            newException.type &&
+            exception.meetingId ===
+            newException.meetingId &&
+            String(exception.teacherId) ===
+            newException.teacherId
         );
 
         if (alreadyExists) {
@@ -1216,20 +1420,23 @@ ${JSON.stringify(
           return {
             ...message,
 
-            actions: message.actions.map((existingAction) =>
-              existingAction === action
-                ? {
+            actions: message.actions.map(
+              (existingAction) =>
+                existingAction === action
+                  ? {
                     ...existingAction,
                     status: "approved",
                   }
-                : existingAction,
+                  : existingAction
             ),
           };
-        }),
+        })
       );
     }
 
-    if (action.type === "updateRuleInterpretation") {
+    if (
+      action.type === "updateRuleInterpretation"
+    ) {
       onRulesChange((prev) =>
         prev.map((rule) => {
           if (rule.id !== action.ruleId) {
@@ -1239,9 +1446,11 @@ ${JSON.stringify(
           return {
             ...rule,
 
-            status: action.formalizationStatus,
+            status:
+              action.formalizationStatus,
 
-            interpretation: action.interpretation,
+            interpretation:
+              action.interpretation,
 
             formalRule: (() => {
               if (!action.formalRuleJson) {
@@ -1249,19 +1458,26 @@ ${JSON.stringify(
               }
 
               try {
-                return JSON.parse(action.formalRuleJson);
+                return JSON.parse(
+                  action.formalRuleJson
+                );
               } catch (error) {
-                console.error("Failed to parse formal rule JSON:", error);
+                console.error(
+                  "Failed to parse formal rule JSON:",
+                  error
+                );
 
                 return null;
               }
             })(),
 
-            clarificationQuestion: action.clarificationQuestion,
+            clarificationQuestion:
+              action.clarificationQuestion,
 
-            parsedAt: new Date().toISOString(),
+            parsedAt:
+              new Date().toISOString(),
           };
-        }),
+        })
       );
 
       onMessagesChange((prev) =>
@@ -1273,16 +1489,17 @@ ${JSON.stringify(
           return {
             ...message,
 
-            actions: message.actions.map((existingAction) =>
-              existingAction === action
-                ? {
+            actions: message.actions.map(
+              (existingAction) =>
+                existingAction === action
+                  ? {
                     ...existingAction,
                     status: "approved",
                   }
-                : existingAction,
+                  : existingAction
             ),
           };
-        }),
+        })
       );
 
       return;
@@ -1315,12 +1532,14 @@ ${JSON.stringify(
               }
             : rule.formalRule,
         };
-      }),
+      })
     );
   }
 
   function handleDeleteRule(ruleId) {
-    onRulesChange((prev) => prev.filter((rule) => rule.id !== ruleId));
+    onRulesChange((prev) =>
+      prev.filter((rule) => rule.id !== ruleId)
+    );
   }
 
   function handleDeleteException(exceptionToDelete) {
@@ -1329,10 +1548,12 @@ ${JSON.stringify(
         (exception) =>
           !(
             exception.type === exceptionToDelete.type &&
-            exception.meetingId === exceptionToDelete.meetingId &&
-            String(exception.teacherId) === String(exceptionToDelete.teacherId)
-          ),
-      ),
+            exception.meetingId ===
+            exceptionToDelete.meetingId &&
+            String(exception.teacherId) ===
+            String(exceptionToDelete.teacherId)
+          )
+      )
     );
   }
 
@@ -1341,11 +1562,14 @@ ${JSON.stringify(
       <h2>סוכן שיבוץ AI</h2>
 
       <div className="scheduling-agent-telemetry">
-        <strong>שימוש API בסשן:</strong> {agentTelemetry.calls} קריאות ·{" "}
-        {agentTelemetry.inputTokens.toLocaleString()} קלט ·{" "}
-        {agentTelemetry.outputTokens.toLocaleString()} פלט ·{" "}
+        <strong>שימוש API בסשן:</strong>{" "}
+        {agentTelemetry.calls} קריאות · {" "}
+        {agentTelemetry.inputTokens.toLocaleString()} קלט · {" "}
+        {agentTelemetry.outputTokens.toLocaleString()} פלט · {" "}
         {agentTelemetry.totalTokens.toLocaleString()} סה״כ tokens
-        {agentTelemetry.lastModel ? ` · ${agentTelemetry.lastModel}` : ""}
+        {agentTelemetry.lastModel
+          ? ` · ${agentTelemetry.lastModel}`
+          : ""}
         {agentTelemetry.lastContextChars
           ? ` · context ${agentTelemetry.lastContextChars.toLocaleString()} chars`
           : ""}
@@ -1381,26 +1605,17 @@ ${JSON.stringify(
               <>
                 <div>✓ ה-Sandbox הריץ Python וקרא את metadata.json.</div>
                 <div>
-                  מורים: {sandboxTestResult.result?.teacherCount ?? "?"} ·
-                  כיתות: {sandboxTestResult.result?.classCount ?? "?"} · יחידות
-                  הוראה: {sandboxTestResult.result?.teachingUnitCount ?? "?"}
+                  מורים: {sandboxTestResult.result?.teacherCount ?? "?"} · כיתות: {sandboxTestResult.result?.classCount ?? "?"} · יחידות הוראה: {sandboxTestResult.result?.teachingUnitCount ?? "?"}
                 </div>
                 <div>
-                  Python runs:{" "}
-                  {sandboxTestResult.telemetry?.codeInterpreterCalls ?? 0} ·
-                  קובץ קלט:{" "}
-                  {(sandboxTestResult.inputFile?.bytes ?? 0).toLocaleString()}{" "}
-                  bytes
+                  Python runs: {sandboxTestResult.telemetry?.codeInterpreterCalls ?? 0} · קובץ קלט: {(sandboxTestResult.inputFile?.bytes ?? 0).toLocaleString()} bytes
                 </div>
                 {Array.isArray(sandboxTestResult.codeRuns) &&
                   sandboxTestResult.codeRuns.length > 0 && (
                     <details>
                       <summary>הצג את קוד ה-Python וה-logs</summary>
                       {sandboxTestResult.codeRuns.map((run, index) => (
-                        <div
-                          key={run.id || index}
-                          className="scheduling-agent-sandbox-code-run"
-                        >
+                        <div key={run.id || index} className="scheduling-agent-sandbox-code-run">
                           <strong>הרצה {index + 1}</strong>
                           <pre>{run.code || "(לא הוחזר קוד)"}</pre>
                           {run.logs && (
@@ -1416,31 +1631,14 @@ ${JSON.stringify(
               </>
             ) : (
               <>
-                <div>
-                  ✕{" "}
-                  {sandboxTestResult.error ||
-                    sandboxTestResult.diagnostic?.message ||
-                    "ה-Sandbox לא עבר את בדיקת התשתית."}
-                </div>
+                <div>✕ {sandboxTestResult.error || sandboxTestResult.diagnostic?.message || "ה-Sandbox לא עבר את בדיקת התשתית."}</div>
                 {sandboxTestResult.checks && (
-                  <pre
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      direction: "ltr",
-                      textAlign: "left",
-                    }}
-                  >
+                  <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
                     {JSON.stringify(sandboxTestResult.checks, null, 2)}
                   </pre>
                 )}
                 {sandboxTestResult.diagnostic && (
-                  <pre
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      direction: "ltr",
-                      textAlign: "left",
-                    }}
-                  >
+                  <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
                     {JSON.stringify(sandboxTestResult.diagnostic, null, 2)}
                   </pre>
                 )}
@@ -1455,8 +1653,7 @@ ${JSON.stringify(
           <div>
             <strong>Candidate → Validator bridge v1</strong>
             <div className="scheduling-agent-sandbox-subtitle">
-              Python יוצר candidate-schedule.json, השרת מוריד אותו מה-container
-              ומריץ עליו את ה-Validator האמיתי.
+              Python יוצר candidate-schedule.json, השרת מוריד אותו מה-container ומריץ עליו את ה-Validator האמיתי.
             </div>
           </div>
 
@@ -1485,38 +1682,23 @@ ${JSON.stringify(
           >
             {bridgeTestResult.success ? (
               <>
+                <div>✓ Candidate שנוצר ב-Python הועבר ל-Validator ועבר בדיקה.</div>
                 <div>
-                  ✓ Candidate שנוצר ב-Python הועבר ל-Validator ועבר בדיקה.
+                  שעות: {bridgeTestResult.validation?.statistics?.totalScheduledHours ?? "?"}/
+                  {bridgeTestResult.validation?.statistics?.totalRequiredHours ?? "?"} ·
+                  שגיאות: {bridgeTestResult.validation?.statistics?.errorCount ?? "?"} ·
+                  אזהרות: {bridgeTestResult.validation?.statistics?.warningCount ?? "?"}
                 </div>
                 <div>
-                  שעות:{" "}
-                  {bridgeTestResult.validation?.statistics
-                    ?.totalScheduledHours ?? "?"}
-                  /
-                  {bridgeTestResult.validation?.statistics
-                    ?.totalRequiredHours ?? "?"}{" "}
-                  · שגיאות:{" "}
-                  {bridgeTestResult.validation?.statistics?.errorCount ?? "?"} ·
-                  אזהרות:{" "}
-                  {bridgeTestResult.validation?.statistics?.warningCount ?? "?"}
-                </div>
-                <div>
-                  Candidate file:{" "}
-                  {(
-                    bridgeTestResult.generatedFile?.bytes ?? 0
-                  ).toLocaleString()}{" "}
-                  bytes · Python runs:{" "}
-                  {bridgeTestResult.telemetry?.codeInterpreterCalls ?? 0}
+                  Candidate file: {(bridgeTestResult.generatedFile?.bytes ?? 0).toLocaleString()} bytes ·
+                  Python runs: {bridgeTestResult.telemetry?.codeInterpreterCalls ?? 0}
                 </div>
                 {Array.isArray(bridgeTestResult.codeRuns) &&
                   bridgeTestResult.codeRuns.length > 0 && (
                     <details>
                       <summary>הצג Python ו-logs של יצירת ה-Candidate</summary>
                       {bridgeTestResult.codeRuns.map((run, index) => (
-                        <div
-                          key={run.id || index}
-                          className="scheduling-agent-sandbox-code-run"
-                        >
+                        <div key={run.id || index} className="scheduling-agent-sandbox-code-run">
                           <strong>הרצה {index + 1}</strong>
                           <pre>{run.code || "(לא הוחזר קוד)"}</pre>
                           {run.logs && <pre>{run.logs}</pre>}
@@ -1527,30 +1709,14 @@ ${JSON.stringify(
               </>
             ) : (
               <>
-                <div>
-                  ✕{" "}
-                  {bridgeTestResult.error ||
-                    "הגשר Candidate → Validator לא עבר את הבדיקה."}
-                </div>
+                <div>✕ {bridgeTestResult.error || "הגשר Candidate → Validator לא עבר את הבדיקה."}</div>
                 {bridgeTestResult.checks && (
-                  <pre
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      direction: "ltr",
-                      textAlign: "left",
-                    }}
-                  >
+                  <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
                     {JSON.stringify(bridgeTestResult.checks, null, 2)}
                   </pre>
                 )}
                 {bridgeTestResult.diagnostic && (
-                  <pre
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      direction: "ltr",
-                      textAlign: "left",
-                    }}
-                  >
+                  <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
                     {JSON.stringify(bridgeTestResult.diagnostic, null, 2)}
                   </pre>
                 )}
@@ -1559,10 +1725,7 @@ ${JSON.stringify(
                     <details>
                       <summary>הצג Python ו-logs לצורך אבחון</summary>
                       {bridgeTestResult.codeRuns.map((run, index) => (
-                        <div
-                          key={run.id || index}
-                          className="scheduling-agent-sandbox-code-run"
-                        >
+                        <div key={run.id || index} className="scheduling-agent-sandbox-code-run">
                           <pre>{run.code || "(לא הוחזר קוד)"}</pre>
                           {run.logs && <pre>{run.logs}</pre>}
                         </div>
@@ -1580,8 +1743,7 @@ ${JSON.stringify(
           <div>
             <strong>Validator failure-injection test v1</strong>
             <div className="scheduling-agent-sandbox-subtitle">
-              Python מסיר בכוונה שיבוץ רגיל אחד. הצלחה = ה-Validator מזהה את
-              הפגם ומדווח עליו.
+              Python מסיר בכוונה שיבוץ רגיל אחד. הצלחה = ה-Validator מזהה את הפגם ומדווח עליו.
             </div>
           </div>
 
@@ -1612,53 +1774,30 @@ ${JSON.stringify(
               <>
                 <div>✓ Python יצר פגם מכוון וה-Validator זיהה אותו כמצופה.</div>
                 <div>
-                  שעות לפני:{" "}
-                  {failureTestResult.beforeValidation?.statistics
-                    ?.totalScheduledHours ?? "?"}
-                  /
-                  {failureTestResult.beforeValidation?.statistics
-                    ?.totalRequiredHours ?? "?"}{" "}
-                  · אחרי:{" "}
-                  {failureTestResult.validation?.statistics
-                    ?.totalScheduledHours ?? "?"}
-                  /
-                  {failureTestResult.validation?.statistics
-                    ?.totalRequiredHours ?? "?"}
+                  שעות לפני: {failureTestResult.beforeValidation?.statistics?.totalScheduledHours ?? "?"}/
+                  {failureTestResult.beforeValidation?.statistics?.totalRequiredHours ?? "?"} ·
+                  אחרי: {failureTestResult.validation?.statistics?.totalScheduledHours ?? "?"}/
+                  {failureTestResult.validation?.statistics?.totalRequiredHours ?? "?"}
                 </div>
                 <div>
-                  חסרות:{" "}
-                  {failureTestResult.validation?.statistics
-                    ?.totalMissingHours ?? "?"}{" "}
-                  · שגיאות:{" "}
-                  {failureTestResult.validation?.statistics?.errorCount ?? "?"}{" "}
-                  · אזהרות:{" "}
-                  {failureTestResult.validation?.statistics?.warningCount ??
-                    "?"}
+                  חסרות: {failureTestResult.validation?.statistics?.totalMissingHours ?? "?"} ·
+                  שגיאות: {failureTestResult.validation?.statistics?.errorCount ?? "?"} ·
+                  אזהרות: {failureTestResult.validation?.statistics?.warningCount ?? "?"}
                 </div>
                 {failureTestResult.injectedFailure && (
                   <div>
-                    הוסר: {failureTestResult.injectedFailure.unitId} · כיתה{" "}
-                    {failureTestResult.injectedFailure.className} · יום{" "}
-                    {failureTestResult.injectedFailure.day} · שעה{" "}
-                    {failureTestResult.injectedFailure.hour}
+                    הוסר: {failureTestResult.injectedFailure.unitId} ·
+                    כיתה {failureTestResult.injectedFailure.className} ·
+                    יום {failureTestResult.injectedFailure.day} ·
+                    שעה {failureTestResult.injectedFailure.hour}
                   </div>
                 )}
                 {Array.isArray(failureTestResult.validation?.warnings) &&
                   failureTestResult.validation.warnings.length > 0 && (
                     <details>
                       <summary>הצג אזהרות Validator</summary>
-                      <pre
-                        style={{
-                          whiteSpace: "pre-wrap",
-                          direction: "ltr",
-                          textAlign: "left",
-                        }}
-                      >
-                        {JSON.stringify(
-                          failureTestResult.validation.warnings,
-                          null,
-                          2,
-                        )}
+                      <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
+                        {JSON.stringify(failureTestResult.validation.warnings, null, 2)}
                       </pre>
                     </details>
                   )}
@@ -1666,18 +1805,8 @@ ${JSON.stringify(
                   failureTestResult.validation.errors.length > 0 && (
                     <details>
                       <summary>הצג שגיאות Validator</summary>
-                      <pre
-                        style={{
-                          whiteSpace: "pre-wrap",
-                          direction: "ltr",
-                          textAlign: "left",
-                        }}
-                      >
-                        {JSON.stringify(
-                          failureTestResult.validation.errors,
-                          null,
-                          2,
-                        )}
+                      <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
+                        {JSON.stringify(failureTestResult.validation.errors, null, 2)}
                       </pre>
                     </details>
                   )}
@@ -1686,10 +1815,7 @@ ${JSON.stringify(
                     <details>
                       <summary>הצג Python ו-logs של יצירת הפגם</summary>
                       {failureTestResult.codeRuns.map((run, index) => (
-                        <div
-                          key={run.id || index}
-                          className="scheduling-agent-sandbox-code-run"
-                        >
+                        <div key={run.id || index} className="scheduling-agent-sandbox-code-run">
                           <strong>הרצה {index + 1}</strong>
                           <pre>{run.code || "(לא הוחזר קוד)"}</pre>
                           {run.logs && <pre>{run.logs}</pre>}
@@ -1700,28 +1826,14 @@ ${JSON.stringify(
               </>
             ) : (
               <>
-                <div>
-                  ✕ {failureTestResult.error || "בדיקת הכשל המכוון לא עברה."}
-                </div>
+                <div>✕ {failureTestResult.error || "בדיקת הכשל המכוון לא עברה."}</div>
                 {failureTestResult.checks && (
-                  <pre
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      direction: "ltr",
-                      textAlign: "left",
-                    }}
-                  >
+                  <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
                     {JSON.stringify(failureTestResult.checks, null, 2)}
                   </pre>
                 )}
                 {failureTestResult.deltas && (
-                  <pre
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      direction: "ltr",
-                      textAlign: "left",
-                    }}
-                  >
+                  <pre style={{ whiteSpace: "pre-wrap", direction: "ltr", textAlign: "left" }}>
                     {JSON.stringify(failureTestResult.deltas, null, 2)}
                   </pre>
                 )}
@@ -1736,19 +1848,10 @@ ${JSON.stringify(
           <div>
             <strong>Auto-Repair Loop v1.2 — Async</strong>
             <div className="scheduling-agent-sandbox-subtitle">
-              כל Attempt רץ כ-OpenAI background response. ה-UI מבצע polling קצר
-              ולכן Netlify Function לא נשארת פתוחה בזמן הרצת Python.
+              כל Attempt רץ כ-OpenAI background response. ה-UI מבצע polling קצר ולכן Netlify Function לא נשארת פתוחה בזמן הרצת Python.
             </div>
           </div>
-          <button
-            type="button"
-            onClick={runAutoRepairLoopTest}
-            disabled={
-              isAutoRepairTesting ||
-              !agentContext?.schoolData ||
-              !agentContext?.baseSchedule
-            }
-          >
+          <button type="button" onClick={runAutoRepairLoopTest} disabled={isAutoRepairTesting || !agentContext?.schoolData || !agentContext?.baseSchedule}>
             {isAutoRepairTesting
               ? autoRepairTestResult?.currentPhase?.startsWith("attempt-1")
                 ? `Attempt 1 — ${autoRepairTestResult?.backgroundStatus || "מתקן"}...`
@@ -1757,142 +1860,78 @@ ${JSON.stringify(
           </button>
         </div>
         {autoRepairTestResult && (
-          <div
-            className={
-              autoRepairTestResult.success
-                ? "scheduling-agent-sandbox-result success"
-                : "scheduling-agent-sandbox-result error"
-            }
-          >
+          <div className={autoRepairTestResult.success ? "scheduling-agent-sandbox-result success" : "scheduling-agent-sandbox-result error"}>
             {autoRepairTestResult.success ? (
               <>
+                <div>✓ הסוכן קיבל דו״ח Validator ותיקן את ה-Candidate באמצעות Python.</div>
                 <div>
-                  ✓ הסוכן קיבל דו״ח Validator ותיקן את ה-Candidate באמצעות
-                  Python.
+                  ניסיון 0: {autoRepairTestResult.attempts?.[0]?.validation?.statistics?.totalScheduledHours ?? "?"}/{autoRepairTestResult.attempts?.[0]?.validation?.statistics?.totalRequiredHours ?? "?"} ·
+                  ניסיון 1: {autoRepairTestResult.attempts?.[1]?.validation?.statistics?.totalScheduledHours ?? "?"}/{autoRepairTestResult.attempts?.[1]?.validation?.statistics?.totalRequiredHours ?? "?"}
                 </div>
                 <div>
-                  ניסיון 0:{" "}
-                  {autoRepairTestResult.attempts?.[0]?.validation?.statistics
-                    ?.totalScheduledHours ?? "?"}
-                  /
-                  {autoRepairTestResult.attempts?.[0]?.validation?.statistics
-                    ?.totalRequiredHours ?? "?"}{" "}
-                  · ניסיון 1:{" "}
-                  {autoRepairTestResult.attempts?.[1]?.validation?.statistics
-                    ?.totalScheduledHours ?? "?"}
-                  /
-                  {autoRepairTestResult.attempts?.[1]?.validation?.statistics
-                    ?.totalRequiredHours ?? "?"}
+                  סופי — שגיאות: {autoRepairTestResult.attempts?.[1]?.validation?.statistics?.errorCount ?? "?"} ·
+                  אזהרות: {autoRepairTestResult.attempts?.[1]?.validation?.statistics?.warningCount ?? "?"} ·
+                  חסרות: {autoRepairTestResult.attempts?.[1]?.validation?.statistics?.totalMissingHours ?? "?"}
                 </div>
                 <div>
-                  סופי — שגיאות:{" "}
-                  {autoRepairTestResult.attempts?.[1]?.validation?.statistics
-                    ?.errorCount ?? "?"}{" "}
-                  · אזהרות:{" "}
-                  {autoRepairTestResult.attempts?.[1]?.validation?.statistics
-                    ?.warningCount ?? "?"}{" "}
-                  · חסרות:{" "}
-                  {autoRepairTestResult.attempts?.[1]?.validation?.statistics
-                    ?.totalMissingHours ?? "?"}
+                  Python runs — ניסיון 0: {autoRepairTestResult.attempts?.[0]?.codeRuns?.length || 0} ·
+                  ניסיון 1: {autoRepairTestResult.attempts?.[1]?.codeRuns?.length || 0}
                 </div>
                 <div>
-                  Python runs — ניסיון 0:{" "}
-                  {autoRepairTestResult.attempts?.[0]?.codeRuns?.length || 0} ·
-                  ניסיון 1:{" "}
-                  {autoRepairTestResult.attempts?.[1]?.codeRuns?.length || 0}
-                </div>
-                <div>
-                  Bounded Multi-Step — Attempt 1 Python runs: current{" "}
-                  {autoRepairTestResult.attempts?.[1]?.codeRuns?.length || 0}
+                  Bounded Multi-Step — Attempt 1 Python runs: current {autoRepairTestResult.attempts?.[1]?.codeRuns?.length || 0}
                 </div>
               </>
             ) : autoRepairTestResult.running ? (
               <div>
-                ⏳{" "}
-                {autoRepairTestResult.currentPhase?.startsWith("attempt-1")
+                ⏳ {autoRepairTestResult.currentPhase?.startsWith("attempt-1")
                   ? `Attempt 1 רץ ברקע — ${autoRepairTestResult.backgroundStatus || "queued"}. ה-UI בודק סטטוס בלי להחזיק Function פתוחה.`
                   : `Attempt 0 רץ ברקע — ${autoRepairTestResult.backgroundStatus || "queued"}. ה-UI בודק סטטוס בלי להחזיק Function פתוחה.`}
               </div>
             ) : (
-              <div>
-                ✕{" "}
-                {autoRepairTestResult.error ||
-                  "Auto-Repair Loop לא עבר את הבדיקה."}
-              </div>
+              <div>✕ {autoRepairTestResult.error || "Auto-Repair Loop לא עבר את הבדיקה."}</div>
             )}
-            {autoRepairTestResult.checks && (
-              <pre
-                style={{
-                  whiteSpace: "pre-wrap",
-                  direction: "ltr",
-                  textAlign: "left",
-                }}
-              >
-                {JSON.stringify(autoRepairTestResult.checks, null, 2)}
-              </pre>
-            )}
-            {Array.isArray(autoRepairTestResult.attempts) &&
-              autoRepairTestResult.attempts.map((attempt) => (
-                <details key={attempt.number}>
-                  <summary>
-                    ניסיון {attempt.number} — {attempt.purpose}
-                  </summary>
-                  {attempt.reply && <div>{attempt.reply}</div>}
-                  <pre
-                    style={{
-                      whiteSpace: "pre-wrap",
-                      direction: "ltr",
-                      textAlign: "left",
-                    }}
-                  >
-                    {JSON.stringify(
-                      attempt.validation?.statistics || {},
-                      null,
-                      2,
-                    )}
-                  </pre>
-                  {attempt.diagnostics && (
-                    <details>
-                      <summary>Diagnostics</summary>
-                      <pre
-                        style={{
-                          whiteSpace: "pre-wrap",
-                          direction: "ltr",
-                          textAlign: "left",
-                        }}
-                      >
-                        {JSON.stringify(attempt.diagnostics, null, 2)}
-                      </pre>
-                    </details>
-                  )}
-                  {(attempt.codeRuns || []).map((run, index) => (
-                    <div
-                      key={run.id || index}
-                      className="scheduling-agent-sandbox-code-run"
-                    >
-                      <strong>Python run {index + 1}</strong>
-                      <pre>{run.code || "(לא הוחזר קוד)"}</pre>
-                      {run.logs && <pre>{run.logs}</pre>}
-                    </div>
-                  ))}
-                </details>
-              ))}
+            {autoRepairTestResult.checks && <pre style={{ whiteSpace:"pre-wrap", direction:"ltr", textAlign:"left" }}>{JSON.stringify(autoRepairTestResult.checks,null,2)}</pre>}
+            {Array.isArray(autoRepairTestResult.attempts) && autoRepairTestResult.attempts.map((attempt) => (
+              <details key={attempt.number}>
+                <summary>ניסיון {attempt.number} — {attempt.purpose}</summary>
+                {attempt.reply && <div>{attempt.reply}</div>}
+                <pre style={{ whiteSpace:"pre-wrap", direction:"ltr", textAlign:"left" }}>{JSON.stringify(attempt.validation?.statistics || {},null,2)}</pre>
+                {attempt.diagnostics && (
+                  <details>
+                    <summary>Diagnostics</summary>
+                    <pre style={{ whiteSpace:"pre-wrap", direction:"ltr", textAlign:"left" }}>{JSON.stringify(attempt.diagnostics,null,2)}</pre>
+                  </details>
+                )}
+                {(attempt.codeRuns || []).map((run,index) => <div key={run.id || index} className="scheduling-agent-sandbox-code-run"><strong>Python run {index+1}</strong><pre>{run.code || "(לא הוחזר קוד)"}</pre>{run.logs && <pre>{run.logs}</pre>}</div>)}
+              </details>
+            ))}
           </div>
         )}
       </div>
 
       <div className="scheduling-agent-workspace-controls">
         {!workspace ? (
-          <button type="button" onClick={onStartWorkspace}>
+          <button
+            type="button"
+            onClick={onStartWorkspace}
+          >
             התחל סביבת עבודה
           </button>
         ) : (
           <>
-            <div>סביבת עבודה פעילה</div>
+            <div>
+              סביבת עבודה פעילה
+            </div>
 
-            <div>ניסיונות: {workspace.attempts?.length || 0}</div>
+            <div>
+              ניסיונות:{" "}
+              {workspace.attempts?.length || 0}
+            </div>
 
-            <button type="button" onClick={onClearWorkspace}>
+            <button
+              type="button"
+              onClick={onClearWorkspace}
+            >
               סגור סביבת עבודה
             </button>
           </>
@@ -1916,76 +1955,99 @@ ${JSON.stringify(
 
                 <div>{message.text}</div>
                 {Array.isArray(message.actions) &&
-                  message.actions.map((action, actionIndex) => (
-                    <div key={actionIndex} className="scheduling-agent-action">
-                      <div>{action.explanation}</div>
-
-                      {action.status === "pending" &&
-                        action.type !== "proposeScheduleMove" && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleApproveAction(message.id, action)
-                            }
-                          >
-                            {action.type ===
-                            "approveMeetingParticipantException"
-                              ? "אשר חריג"
-                              : action.type === "updateRuleInterpretation"
-                                ? "אשר פרשנות"
-                                : "אשר פעולה"}
-                          </button>
-                        )}
-
-                      {action.status === "pending" &&
-                        action.type === "proposeScheduleMove" && (
-                          <div className="scheduling-agent-action-pending-validation">
-                            הצעת שינוי — טרם נבדקה מול כלל אילוצי המערכת
-                          </div>
-                        )}
-
-                      {action.status === "pending" &&
-                        action.type === "proposeScheduleMove" && (
-                          <div className="scheduling-agent-action-pending-validation">
-                            {action.simulation?.success ? (
-                              <>
-                                <div>
-                                  ✓ השינוי עבר סימולציה ראשונית מול ה־validator.
-                                </div>
-
-                                <div>
-                                  שגיאות Core Validator לאחר השינוי:{" "}
-                                  {action.simulation?.validationStatistics
-                                    ?.errorCount ?? 0}
-                                </div>
-
-                                <div>
-                                  עדיין נדרשת בדיקת חוקי־העל מול המערכת המדומה.
-                                </div>
-                              </>
-                            ) : (
-                              <div>
-                                ✕ לא ניתן לבצע אפילו סימולציה של ההצעה:{" "}
-                                {action.simulation?.error || "שגיאה לא ידועה"}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                      {action.simulation?.workspaceAttemptCount > 0 && (
+                  message.actions.map(
+                    (action, actionIndex) => (
+                      <div
+                        key={actionIndex}
+                        className="scheduling-agent-action"
+                      >
                         <div>
-                          ניסיון בסביבת העבודה:{" "}
-                          {action.simulation.workspaceAttemptCount}
+                          {action.explanation}
                         </div>
-                      )}
 
-                      {action.status === "approved" && (
-                        <div className="scheduling-agent-action-approved">
-                          ✓ החריג אושר
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        {action.status === "pending" &&
+                          action.type !== "proposeScheduleMove" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleApproveAction(
+                                  message.id,
+                                  action
+                                )
+                              }
+                            >
+                              {action.type ===
+                                "approveMeetingParticipantException"
+                                ? "אשר חריג"
+                                : action.type ===
+                                  "updateRuleInterpretation"
+                                  ? "אשר פרשנות"
+                                  : "אשר פעולה"}
+                            </button>
+                          )}
+
+                        {action.status === "pending" &&
+                          action.type === "proposeScheduleMove" && (
+                            <div className="scheduling-agent-action-pending-validation">
+                              הצעת שינוי — טרם נבדקה מול כלל אילוצי המערכת
+                            </div>
+                          )}
+
+                        {action.status === "pending" &&
+                          action.type === "proposeScheduleMove" && (
+                            <div className="scheduling-agent-action-pending-validation">
+
+                              {action.simulation?.success ? (
+                                <>
+                                  <div>
+                                    ✓ השינוי עבר סימולציה
+                                    ראשונית מול ה־validator.
+                                  </div>
+
+                                  <div>
+                                    שגיאות Core Validator לאחר
+                                    השינוי:{" "}
+                                    {action.simulation
+                                      ?.validationStatistics
+                                      ?.errorCount ?? 0}
+                                  </div>
+
+                                  <div>
+                                    עדיין נדרשת בדיקת חוקי־העל
+                                    מול המערכת המדומה.
+                                  </div>
+                                </>
+                              ) : (
+                                <div>
+                                  ✕ לא ניתן לבצע אפילו סימולציה
+                                  של ההצעה:{" "}
+                                  {action.simulation?.error ||
+                                    "שגיאה לא ידועה"}
+                                </div>
+                              )}
+
+                            </div>
+                          )}
+
+                        {action.simulation
+                          ?.workspaceAttemptCount > 0 && (
+                            <div>
+                              ניסיון בסביבת העבודה:{" "}
+                              {
+                                action.simulation
+                                  .workspaceAttemptCount
+                              }
+                            </div>
+                          )}
+
+                        {action.status === "approved" && (
+                          <div className="scheduling-agent-action-approved">
+                            ✓ החריג אושר
+                          </div>
+                        )}
+                      </div>
+                    )
+                  )}
               </div>
             ))}
           </div>
@@ -2061,7 +2123,9 @@ ${JSON.stringify(
             </button>
 
             {isRuleCompiling && ruleCompilerPhase && (
-              <div style={{ marginTop: "8px" }}>⏳ {ruleCompilerPhase}</div>
+              <div style={{ marginTop: "8px" }}>
+                ⏳ {ruleCompilerPhase}
+              </div>
             )}
 
             {ruleCompilerResult && (
@@ -2081,23 +2145,17 @@ ${JSON.stringify(
                     </div>
                     <div>
                       Evaluator נתמך:{" "}
-                      {
-                        (ruleCompilerResult.deterministicResults || []).filter(
-                          (item) => item.status !== "unknown",
-                        ).length
-                      }{" "}
-                      · פורמלי אך לא נתמך:{" "}
-                      {
-                        (ruleCompilerResult.deterministicResults || []).filter(
-                          (item) => item.status === "unknown",
-                        ).length
-                      }{" "}
-                      · דורש המשך טיפול:{" "}
-                      {
-                        (ruleCompilerResult.compiledRules || []).filter(
-                          (item) => item.formalizationStatus !== "formalized",
-                        ).length
-                      }
+                      {(ruleCompilerResult.deterministicResults || []).filter(
+                        (item) => item.status !== "unknown"
+                      ).length}
+                      {" "}· פורמלי אך לא נתמך:{" "}
+                      {(ruleCompilerResult.deterministicResults || []).filter(
+                        (item) => item.status === "unknown"
+                      ).length}
+                      {" "}· דורש המשך טיפול:{" "}
+                      {(ruleCompilerResult.compiledRules || []).filter(
+                        (item) => item.formalizationStatus !== "formalized"
+                      ).length}
                     </div>
                   </>
                 ) : (
@@ -2113,15 +2171,22 @@ ${JSON.stringify(
             ) : (
               <ul className="scheduling-agent-list">
                 {rules.map((rule, index) => (
-                  <li key={rule.id} className="scheduling-agent-list-item">
+                  <li
+                    key={rule.id}
+                    className="scheduling-agent-list-item"
+                  >
                     <div className="scheduling-agent-list-content">
                       <div>
-                        <strong>חוק {rule.ruleNumber || index + 1}</strong>
+                        <strong>
+                          חוק {rule.ruleNumber || index + 1}
+                        </strong>
                         {" — "}
                         {rule.originalText}
                       </div>
 
-                      <small>סטטוס: {rule.status}</small>
+                      <small>
+                        סטטוס: {rule.status}
+                      </small>
 
                       <div>
                         <label>
@@ -2141,8 +2206,7 @@ ${JSON.stringify(
                             <option value="recommended">מומלץ</option>
                             <option value="unspecified">לא מסווג</option>
                           </select>
-                          {rule.severityMode === "manual" ||
-                          rule.categorySource === "user" ? (
+                          {rule.severityMode === "manual" || rule.categorySource === "user" ? (
                             <small> · נקבע ידנית</small>
                           ) : (
                             <small> · זוהה אוטומטית</small>
@@ -2153,7 +2217,8 @@ ${JSON.stringify(
                       {rule.interpretation && (
                         <div className="scheduling-agent-rule-check">
                           <div>
-                            <strong>פרשנות:</strong> {rule.interpretation}
+                            <strong>פרשנות:</strong>{" "}
+                            {rule.interpretation}
                           </div>
 
                           <div>
@@ -2171,7 +2236,11 @@ ${JSON.stringify(
                                   textAlign: "left",
                                 }}
                               >
-                                {JSON.stringify(rule.formalRule, null, 2)}
+                                {JSON.stringify(
+                                  rule.formalRule,
+                                  null,
+                                  2,
+                                )}
                               </pre>
                             </details>
                           )}
@@ -2201,11 +2270,15 @@ ${JSON.stringify(
                           </div>
 
                           {rule.checkStatus === "stale" ? (
-                            <div>מערכת השעות השתנתה מאז הבדיקה האחרונה.</div>
+                            <div>
+                              מערכת השעות השתנתה מאז הבדיקה האחרונה.
+                            </div>
                           ) : (
                             <>
                               {rule.checkSummary && (
-                                <div>{rule.checkSummary}</div>
+                                <div>
+                                  {rule.checkSummary}
+                                </div>
                               )}
 
                               {Array.isArray(rule.checkViolations) &&
@@ -2219,7 +2292,7 @@ ${JSON.stringify(
 
                                           {violation.explanation}
                                         </li>
-                                      ),
+                                      )
                                     )}
                                   </ul>
                                 )}
@@ -2227,12 +2300,15 @@ ${JSON.stringify(
                           )}
                         </div>
                       )}
+
                     </div>
 
                     <button
                       type="button"
                       className="scheduling-agent-delete-button"
-                      onClick={() => handleDeleteRule(rule.id)}
+                      onClick={() =>
+                        handleDeleteRule(rule.id)
+                      }
                     >
                       מחק
                     </button>
@@ -2249,32 +2325,38 @@ ${JSON.stringify(
               <p>אין חריגים מאושרים.</p>
             ) : (
               <ul className="scheduling-agent-list">
-                {approvedExceptions.map((exception, index) => (
-                  <li
-                    key={`${exception.type}-${exception.meetingId}-${exception.teacherId}-${index}`}
-                    className="scheduling-agent-list-item"
-                  >
-                    <div className="scheduling-agent-list-content">
-                      <div>
-                        {exception.type}
-                        {" — "}
-                        {exception.teacherId || ""}
+                {approvedExceptions.map(
+                  (exception, index) => (
+                    <li
+                      key={`${exception.type}-${exception.meetingId}-${exception.teacherId}-${index}`}
+                      className="scheduling-agent-list-item"
+                    >
+                      <div className="scheduling-agent-list-content">
+                        <div>
+                          {exception.type}
+                          {" — "}
+                          {exception.teacherId || ""}
+                        </div>
+
+                        {exception.meetingId && (
+                          <small>
+                            {exception.meetingId}
+                          </small>
+                        )}
                       </div>
 
-                      {exception.meetingId && (
-                        <small>{exception.meetingId}</small>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      className="scheduling-agent-delete-button"
-                      onClick={() => handleDeleteException(exception)}
-                    >
-                      מחק
-                    </button>
-                  </li>
-                ))}
+                      <button
+                        type="button"
+                        className="scheduling-agent-delete-button"
+                        onClick={() =>
+                          handleDeleteException(exception)
+                        }
+                      >
+                        מחק
+                      </button>
+                    </li>
+                  )
+                )}
               </ul>
             )}
           </div>

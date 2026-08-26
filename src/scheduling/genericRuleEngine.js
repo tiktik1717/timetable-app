@@ -92,7 +92,21 @@ function makeContext(schedule, schoolData) {
   for (const teacherId of teachersById.keys()) for (const day of days) {
     const rs=placements.filter(p=>p.teacherId===teacherId && p.day===day);
     const hs=[...new Set(rs.map(r=>Number(r.hour)).filter(Number.isFinite))].sort((a,b)=>a-b);
-    teacherDays.push({kind:"teacher_day",teacherId,day,count:rs.length,distinctHours:hs.length,startHour:hs.length?hs[0]:0,endHour:hs.length?hs[hs.length-1]:0,gapCount:hs.length?(hs[hs.length-1]-hs[0]+1)-hs.length:0,maxConsecutiveHours:maxConsecutive(hs)});
+    teacherDays.push({
+      kind:"teacher_day",
+      teacherId,
+      day,
+      // Daily teaching load is the number of DISTINCT timetable hour slots.
+      // A split/group can generate multiple placement records in the same hour,
+      // but that is still one working hour for the teacher.
+      count:hs.length,
+      distinctHours:hs.length,
+      rawPlacementCount:rs.length,
+      startHour:hs.length?hs[0]:0,
+      endHour:hs.length?hs[hs.length-1]:0,
+      gapCount:hs.length?(hs[hs.length-1]-hs[0]+1)-hs.length:0,
+      maxConsecutiveHours:maxConsecutive(hs)
+    });
   }
   return { schedule, schoolData, unitsById, teachersById, studentClasses, homeroomByClass, placements, classDays, gradeDays, teacherDays };
 }
