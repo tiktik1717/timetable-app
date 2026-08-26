@@ -25,6 +25,7 @@ export default function SchedulingAgentView({
 }) {
   const [input, setInput] = useState("");
   const [newRuleText, setNewRuleText] = useState("");
+  const [newRuleSeverity, setNewRuleSeverity] = useState("auto");
   const [isAgentThinking, setIsAgentThinking] = useState(false);
   const [isSandboxTesting, setIsSandboxTesting] = useState(false);
   const [sandboxTestResult, setSandboxTestResult] = useState(null);
@@ -931,7 +932,9 @@ ${JSON.stringify(
   const statistics = validationReport?.statistics || {};
 
   function applyDeterministicCategoryGuard(rule, compiledCategory) {
-    if (rule?.categorySource === "user") {
+    // Manual severity is a user-owned decision and must always win over
+    // compiler inference. Keep categorySource support for older projects.
+    if (rule?.severityMode === "manual" || rule?.categorySource === "user") {
       return rule.category || "unspecified";
     }
 
@@ -1082,7 +1085,14 @@ ${JSON.stringify(
         return {
           ...rule,
           category: applyDeterministicCategoryGuard(rule, compiled.category),
-          categorySource: rule.categorySource === "user" ? "user" : "compiler",
+          severityMode:
+            rule.severityMode === "manual" || rule.categorySource === "user"
+              ? "manual"
+              : "auto",
+          categorySource:
+            rule.severityMode === "manual" || rule.categorySource === "user"
+              ? "user"
+              : "compiler",
           status: compiled.formalizationStatus,
           interpretation: compiled.interpretation,
           formalRule,
@@ -1156,12 +1166,16 @@ ${JSON.stringify(
         0,
       ) + 1;
 
+    const isAutomaticSeverity = newRuleSeverity === "auto";
+
     const newRule = {
       id: `rule-${Date.now()}`,
       ruleNumber: nextRuleNumber,
       originalText: text,
       status: "unparsed",
-      category: "unspecified",
+      category: isAutomaticSeverity ? "unspecified" : newRuleSeverity,
+      severityMode: isAutomaticSeverity ? "auto" : "manual",
+      categorySource: isAutomaticSeverity ? "compiler" : "user",
       createdAt: new Date().toISOString(),
     };
 
@@ -1276,20 +1290,28 @@ ${JSON.stringify(
   }
 
   function handleRuleCategoryChange(ruleId, category) {
+    const isAutomaticSeverity = category === "auto";
+
     onRulesChange((prev) =>
       prev.map((rule) => {
         if (rule.id !== ruleId) return rule;
 
+        const nextCategory = isAutomaticSeverity
+          ? rule.category || "unspecified"
+          : category;
+
         return {
           ...rule,
-          category,
-          categorySource: "user",
-          // Changing severity does not change the semantic IR,
-          // but the formal rule must reflect the user's decision.
+          category: nextCategory,
+          severityMode: isAutomaticSeverity ? "auto" : "manual",
+          categorySource: isAutomaticSeverity ? "compiler" : "user",
+          // Changing severity does not change the semantic IR. A manual
+          // value immediately overrides formalRule.severity. Returning to
+          // automatic keeps the last visible category until the next compiler run.
           formalRule: rule.formalRule
             ? {
                 ...rule.formalRule,
-                severity: category,
+                severity: nextCategory,
               }
             : rule.formalRule,
         };
@@ -2004,6 +2026,21 @@ ${JSON.stringify(
               style={{ width: "100%" }}
             />
 
+            <div style={{ marginTop: "6px", marginBottom: "8px" }}>
+              <label>
+                <small style={{ marginInlineEnd: "6px" }}>סוג החוק:</small>
+                <select
+                  value={newRuleSeverity}
+                  onChange={(event) => setNewRuleSeverity(event.target.value)}
+                >
+                  <option value="auto">אוטומטי — הקומפיילר יחליט</option>
+                  <option value="critical">קריטי</option>
+                  <option value="known_constraint">אילוץ ידוע</option>
+                  <option value="recommended">מומלץ</option>
+                </select>
+              </label>
+            </div>
+
             <button
               type="button"
               onClick={handleAddRule}
@@ -2098,13 +2135,17 @@ ${JSON.stringify(
                               )
                             }
                           >
+                            <option value="auto">אוטומטי</option>
                             <option value="critical">קריטי</option>
                             <option value="known_constraint">אילוץ ידוע</option>
                             <option value="recommended">מומלץ</option>
                             <option value="unspecified">לא מסווג</option>
                           </select>
-                          {rule.categorySource === "user" && (
+                          {rule.severityMode === "manual" ||
+                          rule.categorySource === "user" ? (
                             <small> · נקבע ידנית</small>
+                          ) : (
+                            <small> · זוהה אוטומטית</small>
                           )}
                         </label>
                       </div>
