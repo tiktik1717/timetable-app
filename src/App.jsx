@@ -275,6 +275,13 @@ export default function App() {
     setSchedulingAgentWorkspace,
   ] = useState(null);
 
+  // Incremented whenever project-level agent data is restored. Using this as
+  // a React key forces SchedulingAgentView to remount, so no stale internal UI
+  // state can hide freshly loaded rules.
+  const [schedulingAgentProjectRevision, setSchedulingAgentProjectRevision] =
+    useState(0);
+  const schedulingAgentRestoreTokenRef = useRef(0);
+
   function startSchedulingAgentWorkspace() {
     const workspace =
       createAgentWorkspace(schedule);
@@ -481,6 +488,8 @@ export default function App() {
     checkpoints,
     currentCheckpointId,
     comparisonCheckpointId,
+    schedulingAgentRules,
+    schedulingAgentApprovedExceptions,
     selectedCloudProjectId,
   ]);
 
@@ -680,6 +689,8 @@ export default function App() {
     checkpoints,
     currentCheckpointId,
     comparisonCheckpointId,
+    schedulingAgentRules,
+    schedulingAgentApprovedExceptions,
   ]);
 
   useEffect(() => {
@@ -694,9 +705,80 @@ export default function App() {
     alertNewPurpleHoles(pending.beforeHoles, afterHoles);
   }, [schedule, schoolData]);
 
-  function buildProjectData() {
+  function getSchedulingAgentProjectData() {
     return {
       version: 1,
+      rules: schedulingAgentRules,
+      approvedExceptions: schedulingAgentApprovedExceptions,
+    };
+  }
+
+  function restoreSchedulingAgentProjectData(projectData) {
+    const agentData = projectData?.schedulingAgent || {};
+
+    // Clone the project data before putting it in React state. This keeps the
+    // loaded project object and the live editor state fully independent.
+    const nextRules = Array.isArray(agentData.rules)
+      ? structuredClone(agentData.rules)
+      : [];
+    const nextApprovedExceptions = Array.isArray(agentData.approvedExceptions)
+      ? structuredClone(agentData.approvedExceptions)
+      : [];
+
+    const restoreToken = ++schedulingAgentRestoreTokenRef.current;
+
+    const applyAgentProjectData = () => {
+      // Ignore a delayed restore if a newer project has already been loaded.
+      if (restoreToken !== schedulingAgentRestoreTokenRef.current) return;
+
+      setSchedulingAgentRules(nextRules);
+      setSchedulingAgentApprovedExceptions(nextApprovedExceptions);
+    };
+
+    applyAgentProjectData();
+    setSchedulingAgentProjectRevision((value) => value + 1);
+
+    // Persist immediately as well as through the normal React effect.
+    // Preserve chat messages because they intentionally do not belong to a
+    // project file.
+    try {
+      const savedWorkspace = JSON.parse(
+        localStorage.getItem(SCHEDULING_AGENT_STORAGE_KEY) || "{}",
+      );
+      localStorage.setItem(
+        SCHEDULING_AGENT_STORAGE_KEY,
+        JSON.stringify({
+          ...savedWorkspace,
+          version: 1,
+          rules: nextRules,
+          approvedExceptions: nextApprovedExceptions,
+          updatedAt: new Date().toISOString(),
+        }),
+      );
+    } catch (error) {
+      console.error("Failed to restore scheduling agent project data:", error);
+    }
+
+    // Re-assert once after the rest of the project load has committed. This
+    // protects against schedule/cloud effects that may run during the same
+    // load cycle and previously could leave the UI with an empty rule list.
+    setTimeout(applyAgentProjectData, 0);
+
+    console.log("SCHEDULING AGENT PROJECT DATA RESTORED", {
+      rules: nextRules.length,
+      approvedExceptions: nextApprovedExceptions.length,
+      restoreToken,
+    });
+
+    return {
+      rules: nextRules.length,
+      approvedExceptions: nextApprovedExceptions.length,
+    };
+  }
+
+  function buildProjectData() {
+    return {
+      version: 2,
       savedAt: new Date().toISOString(),
       schoolData,
       schedule,
@@ -704,6 +786,7 @@ export default function App() {
       checkpoints,
       currentCheckpointId,
       comparisonCheckpointId,
+      schedulingAgent: getSchedulingAgentProjectData(),
     };
   }
 
@@ -791,6 +874,7 @@ export default function App() {
       setTeacherHighlights(
         normalizeTeacherHighlights(projectData.teacherHighlights),
       );
+      restoreSchedulingAgentProjectData(projectData);
 
       // רשימת נקודות שמירה חדשה ונפרדת לפרויקט שנטען
       setCheckpoints([...nextCheckpoints]);
@@ -1445,16 +1529,7 @@ export default function App() {
   }
 
   function saveProjectToFile() {
-    const projectData = {
-      version: 1,
-      savedAt: new Date().toISOString(),
-      schoolData,
-      schedule,
-      teacherHighlights,
-      checkpoints,
-      currentCheckpointId,
-      comparisonCheckpointId,
-    };
+    const projectData = buildProjectData();
 
     const json = JSON.stringify(projectData, null, 2);
     const blob = new Blob([json], { type: "application/json" });
@@ -1792,6 +1867,7 @@ export default function App() {
       checkpoints: [],
       currentCheckpointId: "",
       comparisonCheckpointId: "",
+      schedulingAgent: getSchedulingAgentProjectData(),
     };
 
     const json = JSON.stringify(metadataData, null, 2);
@@ -2618,11 +2694,20 @@ export default function App() {
         projectData.schoolData,
       );
 
+      // A file loaded from disk is a standalone project. Do not keep it tied
+      // to a previously selected cloud project, because an automatic cloud
+      // load/save can otherwise overwrite the freshly restored agent rules.
+      setSelectedCloudProjectId("");
+      loadedCloudProjectIdRef.current = null;
+      localStorage.removeItem("selectedCloudProjectId");
+      setHasUnsavedCloudChanges(false);
+
       setSchoolData(normalizedSchoolData);
       setSchedule(projectData.schedule || {});
       setTeacherHighlights(
         normalizeTeacherHighlights(projectData.teacherHighlights),
       );
+      const restoredAgent = restoreSchedulingAgentProjectData(projectData);
 
       setCheckpoints(projectData.checkpoints || []);
       setCurrentCheckpointId(
@@ -2661,7 +2746,9 @@ export default function App() {
         projectData.comparisonCheckpointId || "",
       );
 
-      alert("הפרויקט נטען בהצלחה");
+      alert(
+        `הפרויקט נטען בהצלחה. חוקי־על ששוחזרו: ${restoredAgent.rules}`,
+      );
     } catch (error) {
       console.error(error);
       alert("טעינת הפרויקט נכשלה: " + error.message);
@@ -2695,6 +2782,7 @@ export default function App() {
       setSchoolData(normalizedSchoolData);
       setSchedule(projectData.schedule || {});
       setTeacherHighlights(normalizedHighlights);
+      restoreSchedulingAgentProjectData(projectData);
 
       // המצב החדש אינו נקודת שמירה קיימת בפרויקט הנוכחי.
       setCurrentCheckpointId("");
@@ -2723,7 +2811,7 @@ export default function App() {
 
       alert(
         "מצב המערכת מהקובץ נוסף לפרויקט הנוכחי. " +
-        "נקודות השמירה שבקובץ לא יובאו, ונקודות השמירה הקיימות בפרויקט נשמרו."
+          "נקודות השמירה שבקובץ לא יובאו, ונקודות השמירה הקיימות בפרויקט נשמרו."
       );
     } catch (error) {
       console.error(error);
@@ -5987,6 +6075,7 @@ export default function App() {
 
         {activeView === "schedulingAgent" && (
           <SchedulingAgentView
+            key={`scheduling-agent-${schedulingAgentProjectRevision}`}
             agentContext={schedulingAgentContext}
             validationReport={schedulingAgentValidationReport}
             rules={schedulingAgentRules}
