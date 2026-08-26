@@ -481,6 +481,8 @@ export default function App() {
     checkpoints,
     currentCheckpointId,
     comparisonCheckpointId,
+    schedulingAgentRules,
+    schedulingAgentApprovedExceptions,
     selectedCloudProjectId,
   ]);
 
@@ -680,6 +682,8 @@ export default function App() {
     checkpoints,
     currentCheckpointId,
     comparisonCheckpointId,
+    schedulingAgentRules,
+    schedulingAgentApprovedExceptions,
   ]);
 
   useEffect(() => {
@@ -694,9 +698,50 @@ export default function App() {
     alertNewPurpleHoles(pending.beforeHoles, afterHoles);
   }, [schedule, schoolData]);
 
-  function buildProjectData() {
+  function getSchedulingAgentProjectData() {
     return {
       version: 1,
+      rules: schedulingAgentRules,
+      approvedExceptions: schedulingAgentApprovedExceptions,
+    };
+  }
+
+  function restoreSchedulingAgentProjectData(projectData) {
+    const agentData = projectData?.schedulingAgent || {};
+    const nextRules = Array.isArray(agentData.rules) ? agentData.rules : [];
+    const nextApprovedExceptions = Array.isArray(agentData.approvedExceptions)
+      ? agentData.approvedExceptions
+      : [];
+
+    setSchedulingAgentRules(nextRules);
+    setSchedulingAgentApprovedExceptions(nextApprovedExceptions);
+
+    // The regular scheduling-agent persistence effect will also write this,
+    // but writing immediately prevents stale rules if the page is refreshed
+    // before that effect runs. Preserve chat messages because they are not
+    // part of a project file.
+    try {
+      const savedWorkspace = JSON.parse(
+        localStorage.getItem(SCHEDULING_AGENT_STORAGE_KEY) || "{}",
+      );
+      localStorage.setItem(
+        SCHEDULING_AGENT_STORAGE_KEY,
+        JSON.stringify({
+          ...savedWorkspace,
+          version: 1,
+          rules: nextRules,
+          approvedExceptions: nextApprovedExceptions,
+          updatedAt: new Date().toISOString(),
+        }),
+      );
+    } catch (error) {
+      console.error("Failed to restore scheduling agent project data:", error);
+    }
+  }
+
+  function buildProjectData() {
+    return {
+      version: 2,
       savedAt: new Date().toISOString(),
       schoolData,
       schedule,
@@ -704,6 +749,7 @@ export default function App() {
       checkpoints,
       currentCheckpointId,
       comparisonCheckpointId,
+      schedulingAgent: getSchedulingAgentProjectData(),
     };
   }
 
@@ -791,6 +837,7 @@ export default function App() {
       setTeacherHighlights(
         normalizeTeacherHighlights(projectData.teacherHighlights),
       );
+      restoreSchedulingAgentProjectData(projectData);
 
       // רשימת נקודות שמירה חדשה ונפרדת לפרויקט שנטען
       setCheckpoints([...nextCheckpoints]);
@@ -1445,16 +1492,7 @@ export default function App() {
   }
 
   function saveProjectToFile() {
-    const projectData = {
-      version: 1,
-      savedAt: new Date().toISOString(),
-      schoolData,
-      schedule,
-      teacherHighlights,
-      checkpoints,
-      currentCheckpointId,
-      comparisonCheckpointId,
-    };
+    const projectData = buildProjectData();
 
     const json = JSON.stringify(projectData, null, 2);
     const blob = new Blob([json], { type: "application/json" });
@@ -1792,6 +1830,7 @@ export default function App() {
       checkpoints: [],
       currentCheckpointId: "",
       comparisonCheckpointId: "",
+      schedulingAgent: getSchedulingAgentProjectData(),
     };
 
     const json = JSON.stringify(metadataData, null, 2);
@@ -2623,6 +2662,7 @@ export default function App() {
       setTeacherHighlights(
         normalizeTeacherHighlights(projectData.teacherHighlights),
       );
+      restoreSchedulingAgentProjectData(projectData);
 
       setCheckpoints(projectData.checkpoints || []);
       setCurrentCheckpointId(
@@ -2665,6 +2705,70 @@ export default function App() {
     } catch (error) {
       console.error(error);
       alert("טעינת הפרויקט נכשלה: " + error.message);
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  async function addProjectFileToCurrentProject(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const projectData = JSON.parse(text);
+
+      if (!projectData.schoolData || !projectData.schedule) {
+        throw new Error("קובץ הפרויקט אינו תקין");
+      }
+
+      const normalizedSchoolData = ensureDailyHoursForClasses(
+        projectData.schoolData,
+      );
+      const normalizedHighlights = normalizeTeacherHighlights(
+        projectData.teacherHighlights,
+      );
+
+      // חשוב: אנחנו מייבאים רק את מצב המערכת מהקובץ.
+      // נקודות שמירה ומזהי נקודות שמירה מהקובץ המיובא נזרקים במכוון.
+      // נקודות השמירה של הפרויקט הנוכחי נשארות ללא שינוי.
+      setSchoolData(normalizedSchoolData);
+      setSchedule(projectData.schedule || {});
+      setTeacherHighlights(normalizedHighlights);
+      restoreSchedulingAgentProjectData(projectData);
+
+      // המצב החדש אינו נקודת שמירה קיימת בפרויקט הנוכחי.
+      setCurrentCheckpointId("");
+
+      setHistory([]);
+      setFuture([]);
+
+      localStorage.setItem(
+        "schoolData",
+        JSON.stringify(normalizedSchoolData),
+      );
+      localStorage.setItem(
+        "schoolSchedule",
+        JSON.stringify(projectData.schedule || {}),
+      );
+      localStorage.setItem(
+        "teacherHighlights",
+        JSON.stringify(normalizedHighlights),
+      );
+      localStorage.setItem("currentCheckpointId", "");
+
+      // אין לגעת ב-checkpoints או comparisonCheckpointId:
+      // הם שייכים לפרויקט הנוכחי, לא לקובץ המיובא.
+
+      setHasUnsavedCloudChanges(true);
+
+      alert(
+        "מצב המערכת מהקובץ נוסף לפרויקט הנוכחי. " +
+          "נקודות השמירה שבקובץ לא יובאו, ונקודות השמירה הקיימות בפרויקט נשמרו."
+      );
+    } catch (error) {
+      console.error(error);
+      alert("הוספת הקובץ לפרויקט נכשלה: " + error.message);
     } finally {
       event.target.value = "";
     }
@@ -5952,6 +6056,7 @@ export default function App() {
             saveProjectToFile={saveProjectToFile}
             saveSchedulingMetadataToFile={saveSchedulingMetadataToFile}
             loadProjectFromFile={loadProjectFromFile}
+            addProjectFileToCurrentProject={addProjectFileToCurrentProject}
             handleExcelUpload={handleExcelUpload}
             clearProject={clearProject}
             user={user}

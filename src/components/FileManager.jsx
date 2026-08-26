@@ -5,6 +5,7 @@ export default function FileManager({
     saveProjectToFile,
     saveSchedulingMetadataToFile,
     loadProjectFromFile,
+    addProjectFileToCurrentProject,
     handleExcelUpload,
     clearProject,
     checkpoints,
@@ -212,6 +213,16 @@ export default function FileManager({
                         type="file"
                         accept=".json"
                         onChange={loadProjectFromFile}
+                        hidden
+                    />
+                </label>
+
+                <label className="file-action-button">
+                    הוסף קובץ לפרויקט נוכחי
+                    <input
+                        type="file"
+                        accept=".json,application/json"
+                        onChange={addProjectFileToCurrentProject}
                         hidden
                     />
                 </label>
