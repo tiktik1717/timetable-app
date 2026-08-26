@@ -7,11 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "validate:schedule": "node scripts/validate-schedule.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@supabase/supabase-js": "^2.106.2",
+    "openai": "^7.4.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-markdown": "^10.1.0",

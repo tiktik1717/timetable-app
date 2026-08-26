@@ -126,6 +126,9 @@ export default function DroppableCell({
                   selectedCellHint === "available"
                     ? "available-for-selected-cell"
                     : "",
+                  selectedCellHint === "availableExhausted"
+                    ? "available-for-selected-cell exhausted-available-for-selected-cell"
+                    : "",
                   selectedCellHint === "notSameTimeConflict"
                     ? "not-same-time-candidate"
                     : "",
