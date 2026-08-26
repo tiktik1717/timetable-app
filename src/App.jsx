@@ -289,7 +289,7 @@ export default function App() {
     setSchedulingAgentWorkspace(workspace);
 
     console.log(
-      "AGENT WORKSPACE STARTED:",
+      "AGENT WORKSPACE STARTED WITH:",
       workspace
     );
 
