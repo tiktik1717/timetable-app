@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   solveWithAgent,
 } from "../scheduling/agentSolver";
@@ -6,6 +6,70 @@ import {
   evaluateFormalRules,
   formalRuleEvaluationsToRuleCheckResults,
 } from "../scheduling/ruleEvaluator";
+import {
+  validateSemanticContract,
+  repairFormalRuleSemanticContract,
+  buildExistsRepairFromSemanticOnly,
+  preserveSafePartialFormalRule,
+} from "../scheduling/semanticContractValidator";
+import { validateSchedule } from "../scheduling/scheduleValidator";
+
+
+function downloadJsonFile(data, filename) {
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], {
+    type: "application/json;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function buildRuleCompilerExportFilename(date = new Date()) {
+  const pad = (value) => String(value).padStart(2, "0");
+  const stamp = [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+  ].join("-") +
+    "_" +
+    [
+      pad(date.getHours()),
+      pad(date.getMinutes()),
+      pad(date.getSeconds()),
+    ].join("-");
+
+  return `rule-compiler-output-${stamp}.json`;
+}
+
+
+function getRuleKindLabel(ruleKind) {
+  const labels = {
+    hard_constraint: "אילוץ על התוצאה",
+    soft_preference: "העדפה על התוצאה",
+    comparison_objective: "יעד השוואתי / אופטימיזציה",
+    search_strategy: "אסטרטגיית חיפוש",
+    semantic_guidance: "הנחיה סמנטית",
+  };
+  return labels[ruleKind] || "טרם סווג";
+}
+
+function isFlexibleSemanticRule(rule) {
+  return (
+    rule?.status === "semantic_only" &&
+    [
+      "comparison_objective",
+      "search_strategy",
+      "semantic_guidance",
+      "soft_preference",
+    ].includes(rule?.ruleKind)
+  );
+}
 
 export default function SchedulingAgentView({
   agentContext,
@@ -20,10 +84,13 @@ export default function SchedulingAgentView({
 
   workspace,
   onStartWorkspace,
+  onStartGenerationWorkspace,
   onClearWorkspace,
 
   onTryWorkspaceMove,
   onTryWorkspaceMovePure,
+  onApplyGenerationCandidate,
+  onRecordGenerationAttemptFailure,
 }) {
   const [input, setInput] = useState("");
   const [newRuleText, setNewRuleText] = useState("");
@@ -38,6 +105,8 @@ export default function SchedulingAgentView({
   const [isAutoRepairTesting, setIsAutoRepairTesting] = useState(false);
   const [autoRepairTestResult, setAutoRepairTestResult] = useState(null);
   const [isRuleCompiling, setIsRuleCompiling] = useState(false);
+  const [isGenerationRunning, setIsGenerationRunning] = useState(false);
+  const [generationRunResult, setGenerationRunResult] = useState(null);
   const [ruleCompilerResult, setRuleCompilerResult] = useState(null);
   const [ruleCompilerPhase, setRuleCompilerPhase] = useState("");
   const [agentTelemetry, setAgentTelemetry] = useState({
@@ -88,6 +157,7 @@ export default function SchedulingAgentView({
       rules: rules || [],
       schedule: scheduleToCheck,
       schoolData: agentContext?.schoolData || {},
+      baselineSchedule: agentContext?.baseSchedule || null,
     });
 
     return {
@@ -1143,13 +1213,13 @@ ${JSON.stringify(
 
       const startData = await parseJsonResponse(
         startResponse,
-        "Rule Compiler v4.5 start",
+        "Rule Compiler v6.6.3 start",
       );
 
       if (!startResponse.ok || !startData?.success) {
         throw new Error(
           startData?.error ||
-            "Rule Compiler v4.5 לא הצליח להתחיל",
+            "Rule Compiler v6.6.3 לא הצליח להתחיל",
         );
       }
 
@@ -1158,7 +1228,7 @@ ${JSON.stringify(
 
       if (!responseId) {
         throw new Error(
-          "Rule Compiler v4.5 לא החזיר responseId",
+          "Rule Compiler v6.6.3 לא החזיר responseId",
         );
       }
 
@@ -1196,7 +1266,7 @@ ${JSON.stringify(
         const collectData =
           await parseJsonResponse(
             collectResponse,
-            "Rule Compiler v4.5 collect",
+            "Rule Compiler v6.6.3 collect",
           );
 
         if (
@@ -1205,7 +1275,7 @@ ${JSON.stringify(
         ) {
           throw new Error(
             collectData?.error ||
-              "Rule Compiler v4.5 נכשל בזמן איסוף התוצאה",
+              "Rule Compiler v6.6.3 נכשל בזמן איסוף התוצאה",
           );
         }
 
@@ -1217,7 +1287,7 @@ ${JSON.stringify(
 
       if (!data?.completed) {
         throw new Error(
-          "Rule Compiler v4.5 לא הסתיים בתוך 3 דקות",
+          "Rule Compiler v6.6.3 לא הסתיים בתוך 3 דקות",
         );
       }
 
@@ -1240,25 +1310,157 @@ ${JSON.stringify(
         if (!compiled) return rule;
 
         let formalRule = null;
+        let effectiveFormalizationStatus =
+          compiled.formalizationStatus;
+        let compilerFallbackUsed = false;
+        let semanticContractRepairs = [];
+        let semanticContractErrors = [];
+
+        const guardedSeverity =
+          applyDeterministicCategoryGuard(
+            rule,
+            compiled.category,
+          );
+
         if (
-          compiled.formalizationStatus === "formalized" &&
+          (
+            compiled.formalizationStatus === "formalized" ||
+            compiled.formalizationStatus === "partially_formalized"
+          ) &&
           compiled.formalRuleJson
         ) {
           try {
-            formalRule = JSON.parse(
+            const parsedFormalRule = JSON.parse(
               compiled.formalRuleJson,
             );
+            parsedFormalRule.severity = guardedSeverity;
 
-            formalRule.severity =
-              applyDeterministicCategoryGuard(
-                rule,
-                compiled.category,
-              );
+            const repaired =
+              repairFormalRuleSemanticContract({
+                originalText: rule.originalText || "",
+                compiled,
+                formalRule: parsedFormalRule,
+              });
+
+            formalRule = repaired.formalRule;
+            semanticContractRepairs = [
+              ...semanticContractRepairs,
+              ...(repaired.repairs || []),
+            ];
+
+            const contract =
+              validateSemanticContract({
+                originalText: rule.originalText || "",
+                compiled,
+                formalRule,
+              });
+
+            if (!contract.ok) {
+              semanticContractErrors = contract.errors || [];
+              formalRule = null;
+              effectiveFormalizationStatus = "semantic_only";
+            }
           } catch (error) {
             console.error(
               "Rule Compiler returned invalid formalRuleJson:",
               error,
             );
+          }
+        }
+
+        // Deterministic capability-contradiction repair:
+        // if the compiler itself explains that `exists` is the correct
+        // representation for a missing day, build it from resolved entities
+        // rather than accepting semantic_only.
+        if (!formalRule) {
+          const existsRepair =
+            buildExistsRepairFromSemanticOnly({
+              originalText: rule.originalText || "",
+              compiled,
+              severity: guardedSeverity,
+            });
+          if (existsRepair) {
+            formalRule = existsRepair;
+            effectiveFormalizationStatus = "formalized";
+            semanticContractRepairs.push(
+              "semantic_only_to_exists",
+            );
+          }
+        }
+
+        // Preserve a previously validated deterministic subset when the new
+        // compiler run asks for clarification only about the remaining
+        // semantic portion. This prevents a measurable partial rule from
+        // disappearing merely because another clause is ambiguous.
+        if (!formalRule) {
+          const partialRepair = preserveSafePartialFormalRule({
+            originalText: rule.originalText || "",
+            compiled,
+            previousRule: rule,
+            severity: guardedSeverity,
+          });
+          if (partialRepair) {
+            formalRule = partialRepair.formalRule;
+            effectiveFormalizationStatus = "partially_formalized";
+            semanticContractRepairs = [
+              ...semanticContractRepairs,
+              ...(partialRepair.repairs || []),
+            ];
+          }
+        }
+
+        // Last-known-good safety net:
+        // malformed JSON may reuse the previous Formal Rule only after it is
+        // repaired/validated against the CURRENT grounding and semantics.
+        // This prevents stale LKG expressions from contradicting newly
+        // resolved constraint groups or exclusivity.
+        const invalidJsonGuardTriggered =
+          compiled.formalizationStatus === "semantic_only" &&
+          String(compiled.explanation || "").includes(
+            "formalRuleJson remained invalid after conservative repair",
+          );
+
+        if (
+          !formalRule &&
+          invalidJsonGuardTriggered &&
+          rule.formalRule &&
+          (
+            rule.status === "formalized" ||
+            rule.status === "partially_formalized"
+          )
+        ) {
+          const lkg = JSON.parse(
+            JSON.stringify(rule.formalRule),
+          );
+          lkg.severity = guardedSeverity;
+
+          const repairedLkg =
+            repairFormalRuleSemanticContract({
+              originalText: rule.originalText || "",
+              compiled,
+              formalRule: lkg,
+            });
+
+          const lkgContract =
+            validateSemanticContract({
+              originalText: rule.originalText || "",
+              compiled,
+              formalRule: repairedLkg.formalRule,
+            });
+
+          if (lkgContract.ok) {
+            formalRule = repairedLkg.formalRule;
+            semanticContractRepairs = [
+              ...semanticContractRepairs,
+              ...(repairedLkg.repairs || []),
+            ];
+            effectiveFormalizationStatus = rule.status;
+            compilerFallbackUsed = true;
+          } else {
+            semanticContractErrors = [
+              ...semanticContractErrors,
+              ...(lkgContract.errors || []),
+            ];
           }
         }
 
@@ -1277,19 +1479,83 @@ ${JSON.stringify(
             rule.severityMode === "manual" || rule.categorySource === "user"
               ? "user"
               : "compiler",
-          status: compiled.formalizationStatus,
+          status: effectiveFormalizationStatus,
+          ruleKind:
+            compilerFallbackUsed
+              ? (rule.ruleKind || "hard_constraint")
+              : compiled.ruleKind ||
+            (
+              effectiveFormalizationStatus === "formalized" ||
+              effectiveFormalizationStatus === "partially_formalized"
+                ? (applyDeterministicCategoryGuard(rule, compiled.category) === "recommended"
+                    ? "soft_preference"
+                    : "hard_constraint")
+                : "semantic_guidance"
+            ),
           interpretation: compiled.interpretation,
+          semanticGuidance:
+            compiled.semanticGuidance ||
+            compiled.interpretation ||
+            rule.originalText ||
+            "",
+          formalCoverage:
+            compilerFallbackUsed
+              ? (
+                  rule.formalCoverage || {
+                    covered: "Last-known-good Formal Rule נשמר לאחר כשל פורמט זמני של הקומפיילר.",
+                    semanticOnly: "",
+                  }
+                )
+              : compiled.formalCoverage || {
+              covered:
+                compiled.formalizationStatus === "formalized"
+                  ? "מלוא החוק"
+                  : "",
+              semanticOnly:
+                compiled.formalizationStatus === "formalized"
+                  ? ""
+                  : (
+                      compiled.semanticGuidance ||
+                      compiled.interpretation ||
+                      rule.originalText ||
+                      ""
+                    ),
+            },
           formalRule,
           evaluatorKey:
-            compiled.evaluatorKey || "unsupported",
+            formalRule
+              ? "generic"
+              : (compiled.evaluatorKey || "unsupported"),
           resolvedEntities:
             compiled.resolvedEntities || [],
           clarificationQuestion:
             compiled.clarificationQuestion || null,
-          compilerExplanation:
+          capabilityPlan:
+            compiled.capabilityPlan || {
+              requirements: [],
+              selectedCapabilities: [],
+              composition: "",
+              unsupportedRequirements: [],
+            },
+          compilerExplanation: [
             compiled.explanation || "",
+            compilerFallbackUsed
+              ? "[UI fallback: preserved semantically validated last-known-good Formal Rule.]"
+              : "",
+            semanticContractRepairs.length
+              ? `[Semantic Contract repair: ${semanticContractRepairs.join(", ")}.]`
+              : "",
+            semanticContractErrors.length
+              ? `[Semantic Contract rejected: ${semanticContractErrors
+                  .map((item) => item.code)
+                  .join(", ")}.]`
+              : "",
+          ].filter(Boolean).join(" "),
+          compilerFallbackUsed,
+          semanticContractRepairs,
+          semanticContractErrors,
           compiledAt: new Date().toISOString(),
-          compilerVersion: "rule-compiler-v4.2-generic",
+          compilerVersion: "rule-compiler-v6.6.3-grounding-partial-population-guards",
         };
       });
 
@@ -1300,6 +1566,7 @@ ${JSON.stringify(
           agentContext?.baseSchedule ||
           {},
         schoolData: agentContext?.schoolData || {},
+        baselineSchedule: agentContext?.baseSchedule || null,
       });
 
       const deterministicResults =
@@ -1312,14 +1579,73 @@ ${JSON.stringify(
           (item) => item.ruleId === rule.id,
         );
 
-        if (!result) return rule;
+        if (!result) {
+          // A fresh compilation is authoritative. Never keep stale
+          // evaluator/check fields from an older formalization.
+          const clearedRule = {
+            ...rule,
+            evaluatorSupported: false,
+            checkStatus: null,
+            checkSummary: "",
+            checkViolations: [],
+            checkedAt: new Date().toISOString(),
+          };
+
+          if (isFlexibleSemanticRule(rule)) {
+            return {
+              ...clearedRule,
+              checkStatus: "guidance",
+              checkSummary:
+                rule.ruleKind === "comparison_objective"
+                  ? "נשמר כיעד אופטימיזציה להשוואת פתרונות מול מערכת הבסיס."
+                  : rule.ruleKind === "search_strategy"
+                    ? "נשמר כהנחיית אסטרטגיית חיפוש לסוכן."
+                    : "נשמר כהנחיה סמנטית לסוכן; אין בדיקה דטרמיניסטית מלאה.",
+            };
+          }
+
+          if (rule.status === "needs_clarification") {
+            return {
+              ...clearedRule,
+              checkStatus: "clarification",
+              checkSummary:
+                "לא בוצעה בדיקה דטרמיניסטית משום שהחוק דורש הבהרה.",
+            };
+          }
+
+          if (rule.status === "semantic_only") {
+            return {
+              ...clearedRule,
+              checkStatus: "guidance",
+              checkSummary:
+                "החוק מובן אך אינו נבדק כרגע דטרמיניסטית; ההנחיה הסמנטית נשמרה.",
+            };
+          }
+
+          return clearedRule;
+        }
+
+        const isPartial =
+          rule.status === "partially_formalized";
 
         return {
           ...rule,
           evaluatorSupported:
             result.status !== "unknown",
-          checkStatus: result.status,
-          checkSummary: result.summary,
+          checkStatus:
+            isPartial && result.status === "satisfied"
+              ? "partial_satisfied"
+              : isPartial && result.status === "violated"
+                ? "partial_violated"
+                : result.status,
+          checkSummary:
+            isPartial
+              ? (
+                  result.status === "satisfied"
+                    ? "החלק הפורמלי של החוק מתקיים. נותר חלק סמנטי שאינו נבדק דטרמיניסטית."
+                    : "נמצאה הפרה בחלק הפורמלי של החוק; בנוסף קיים חלק סמנטי שאינו נבדק דטרמיניסטית."
+                )
+              : result.summary,
           checkViolations: result.violations || [],
           checkedAt: new Date().toISOString(),
         };
@@ -1327,19 +1653,95 @@ ${JSON.stringify(
 
       onRulesChange(() => evaluatedRules);
 
-      setRuleCompilerResult({
+      const compilerResultForUi = {
         ...data,
         evaluations,
         deterministicResults,
-      });
+      };
+
+      setRuleCompilerResult(compilerResultForUi);
+
+      // Create a compact, portable diagnostic artifact after every
+      // successful compilation. It contains the complete rule state and
+      // compiler/evaluator output, but intentionally excludes schoolData
+      // and the timetable itself so it is easy to share for debugging.
+      const exportPayload = {
+        exportVersion: 18,
+        exportedAt: new Date().toISOString(),
+        compilerVersion: "rule-compiler-v6.6.3-grounding-partial-population-guards",
+        summary: {
+          totalRules: evaluatedRules.length,
+          formalized: evaluatedRules.filter(
+            (rule) => rule.status === "formalized",
+          ).length,
+          partiallyFormalized: evaluatedRules.filter(
+            (rule) => rule.status === "partially_formalized",
+          ).length,
+          evaluatorSupported: evaluatedRules.filter(
+            (rule) => rule.evaluatorSupported === true,
+          ).length,
+          satisfied: evaluatedRules.filter(
+            (rule) => rule.checkStatus === "satisfied",
+          ).length,
+          violated: evaluatedRules.filter(
+            (rule) => rule.checkStatus === "violated",
+          ).length,
+          unknown: evaluatedRules.filter(
+            (rule) =>
+              !rule.checkStatus ||
+              rule.checkStatus === "unknown",
+          ).length,
+          flexibleGuidance: evaluatedRules.filter(
+            (rule) => isFlexibleSemanticRule(rule),
+          ).length,
+          comparisonObjectives: evaluatedRules.filter(
+            (rule) => rule.ruleKind === "comparison_objective",
+          ).length,
+          searchStrategies: evaluatedRules.filter(
+            (rule) => rule.ruleKind === "search_strategy",
+          ).length,
+          softPreferences: evaluatedRules.filter(
+            (rule) => rule.ruleKind === "soft_preference",
+          ).length,
+        },
+        rules: evaluatedRules,
+        compiler: {
+          success: data.success,
+          completed: data.completed,
+          compiledRules: data.compiledRules || [],
+          telemetry: data.telemetry || null,
+          // Preserve the complete server response as well, so the exported
+          // file can replace copy/pasting the on-screen compiler output.
+          rawResponse: data,
+        },
+        deterministicEvaluation: {
+          evaluations,
+          results: deterministicResults,
+        },
+      };
+
+      try {
+        downloadJsonFile(
+          exportPayload,
+          buildRuleCompilerExportFilename(),
+        );
+      } catch (downloadError) {
+        // Compilation must still count as successful even if the browser
+        // blocks an automatic download. Keep the result available in UI.
+        console.error(
+          "Failed to download Rule Compiler JSON export:",
+          downloadError,
+        );
+      }
+
       recordTelemetry(data.telemetry);
     } catch (error) {
-      console.error("Rule Compiler v4.5 failed:", error);
+      console.error("Rule Compiler v6.6.3 failed:", error);
       setRuleCompilerResult({
         success: false,
         error:
           error?.message ||
-          "שגיאה לא ידועה ב-Rule Compiler v4.5",
+          "שגיאה לא ידועה ב-Rule Compiler v6.6.3",
       });
     } finally {
       setIsRuleCompiling(false);
@@ -1555,6 +1957,85 @@ ${JSON.stringify(
           )
       )
     );
+  }
+
+
+  const generationValidation = useMemo(() => {
+    if (workspace?.mode !== "generation" || !workspace?.workingSchedule) return null;
+    return validateSchedule({
+      schedule: workspace.workingSchedule,
+      schoolData: agentContext?.schoolData || {},
+      approvedExceptions: approvedExceptions || [],
+    });
+  }, [workspace, agentContext?.schoolData, approvedExceptions]);
+
+  const generationStats = generationValidation?.statistics || null;
+
+  async function runGenerationAttempt() {
+    if (isGenerationRunning || workspace?.mode !== "generation") return;
+    setIsGenerationRunning(true);
+    setGenerationRunResult({ running: true, phase: "starting" });
+    try {
+      const startResponse = await fetch("/.netlify/functions/generation-async-start", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          schoolData: agentContext?.schoolData || {},
+          schedule: workspace.workingSchedule,
+          baselineSchedule: workspace.baselineSchedule || agentContext?.baseSchedule || null,
+          rules: rules || [], approvedExceptions: approvedExceptions || [],
+        }),
+      });
+      const start = await startResponse.json();
+      if (!startResponse.ok || !start?.success) throw new Error(start?.error || "Generation start failed");
+      setGenerationRunResult({ running: true, phase: start.status || "queued", responseId: start.responseId });
+
+      let terminal = false;
+      let poll = null;
+      for (let i = 0; i < 180; i += 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const pollResponse = await fetch("/.netlify/functions/generation-async-poll", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ responseId: start.responseId }),
+        });
+        poll = await pollResponse.json();
+        if (!pollResponse.ok || !poll?.success) throw new Error(poll?.error || "Generation polling failed");
+        setGenerationRunResult(prev => ({ ...(prev || {}), running: true, phase: poll.status }));
+        if (poll.terminal) { terminal = true; break; }
+      }
+      if (!terminal) throw new Error("Generation attempt did not finish within the UI polling window");
+      if (poll.status !== "completed") throw new Error(poll?.error?.message || `Generation ended with status ${poll.status}`);
+
+      const collectResponse = await fetch("/.netlify/functions/generation-async-collect", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ responseId: start.responseId, uploadedFileIds: start.uploadedFileIds || [], schoolData: agentContext?.schoolData || {}, baselineSchedule: workspace.baselineSchedule || agentContext?.baseSchedule || null, rules: rules || [], approvedExceptions: approvedExceptions || [] }),
+      });
+      const result = await collectResponse.json();
+      if (!collectResponse.ok || !result?.success) {
+        recordTelemetry(result?.telemetry);
+        onRecordGenerationAttemptFailure?.(result);
+        setGenerationRunResult({ ...result, running: false, phase: "failed" });
+        return;
+      }
+      recordTelemetry(result.telemetry);
+      onApplyGenerationCandidate?.(result);
+      setGenerationRunResult({ ...result, running: false, phase: "completed" });
+    } catch (error) {
+      const failure = { running: false, phase: "failed", error: error?.message || String(error) };
+      onRecordGenerationAttemptFailure?.(failure);
+      setGenerationRunResult(failure);
+    } finally { setIsGenerationRunning(false); }
+  }
+
+  function exportGenerationTrace() {
+    if (!workspace || workspace.mode !== "generation") return;
+    downloadJsonFile({
+      exportVersion: 2,
+      type: "generation-workspace-trace",
+      exportedAt: new Date().toISOString(),
+      statistics: generationStats,
+      validation: generationValidation,
+      workspace,
+      rules: rules || [],
+    }, `generation-run-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
   }
 
   return (
@@ -1911,12 +2392,14 @@ ${JSON.stringify(
 
       <div className="scheduling-agent-workspace-controls">
         {!workspace ? (
-          <button
-            type="button"
-            onClick={onStartWorkspace}
-          >
-            התחל סביבת עבודה
-          </button>
+          <>
+            <button type="button" onClick={onStartWorkspace}>
+              התחל סביבת עבודה לתיקון
+            </button>
+            <button type="button" onClick={onStartGenerationWorkspace}>
+              התחל Generation Workspace מאפס
+            </button>
+          </>
         ) : (
           <>
             <div>
@@ -1927,6 +2410,36 @@ ${JSON.stringify(
               ניסיונות:{" "}
               {workspace.attempts?.length || 0}
             </div>
+
+            {workspace.mode === "generation" && generationStats && (
+              <div className="generation-workspace-dashboard">
+                <strong>Generation Run #1 — Empty → Full</strong>
+                <div>שובצו: {generationStats.totalScheduledHours} / {generationStats.totalRequiredHours}</div>
+                <div>התקדמות: {generationStats.schedulingPercentage}%</div>
+                <div>חסרות: {generationStats.totalMissingHours}</div>
+                <div>שגיאות Core: {generationStats.errorCount}</div>
+                <div>אזהרות: {generationStats.warningCount}</div>
+                <div>יחידות עם שעות חסרות: {generationStats.missingUnitCount}</div>
+                <button type="button" onClick={runGenerationAttempt} disabled={isGenerationRunning}>
+                  {isGenerationRunning ? `Generation רץ — ${generationRunResult?.phase || "מתחיל"}...` : "הרץ Generation Attempt"}
+                </button>
+                <button type="button" onClick={exportGenerationTrace}>יצא Trace של הריצה</button>
+                {generationRunResult && !generationRunResult.running && (
+                  <div className={generationRunResult.error ? "scheduling-agent-sandbox-result error" : "scheduling-agent-sandbox-result success"}>
+                    {generationRunResult.error ? `✕ ${generationRunResult.error}` : (
+                      <>
+                        <div>✓ Candidate נוצר ונבדק ב-Validator.</div>
+                        <div>Python runs: {generationRunResult.codeRuns?.length || 0}</div>
+                        <div>Strategy: {generationRunResult.modelResult?.strategySummary || "—"}</div>
+                        <details><summary>Generation trace / Python</summary>
+                          {(generationRunResult.codeRuns || []).map((run, index) => <div key={run.id || index}><strong>Python run {index + 1}</strong><pre>{run.code || ""}</pre><pre>{run.logs || ""}</pre></div>)}
+                        </details>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             <button
               type="button"
@@ -2119,7 +2632,7 @@ ${JSON.stringify(
             >
               {isRuleCompiling
                 ? "מקמפל חוקי־על..."
-                : "Rule Compiler v4.5 — קמפל חוקים"}
+                : "Rule Compiler v6.6.3 — קמפל חוקים"}
             </button>
 
             {isRuleCompiling && ruleCompilerPhase && (
@@ -2152,9 +2665,20 @@ ${JSON.stringify(
                       {(ruleCompilerResult.deterministicResults || []).filter(
                         (item) => item.status === "unknown"
                       ).length}
-                      {" "}· דורש המשך טיפול:{" "}
+                      {" "}· פורמלי חלקית:{" "}
                       {(ruleCompilerResult.compiledRules || []).filter(
-                        (item) => item.formalizationStatus !== "formalized"
+                        (item) =>
+                          item.formalizationStatus === "partially_formalized"
+                      ).length}
+                      {" "}· הנחיות גמישות:{" "}
+                      {(ruleCompilerResult.compiledRules || []).filter(
+                        (item) =>
+                          item.formalizationStatus === "semantic_only"
+                      ).length}
+                      {" "}· דורש הבהרה:{" "}
+                      {(ruleCompilerResult.compiledRules || []).filter(
+                        (item) =>
+                          item.formalizationStatus === "needs_clarification"
                       ).length}
                     </div>
                   </>
@@ -2222,9 +2746,35 @@ ${JSON.stringify(
                           </div>
 
                           <div>
+                            <strong>סוג יישום:</strong>{" "}
+                            {getRuleKindLabel(rule.ruleKind)}
+                          </div>
+
+                          <div>
                             <strong>Evaluator:</strong>{" "}
                             {rule.evaluatorKey || "unsupported"}
                           </div>
+
+                          {rule.status === "partially_formalized" &&
+                            rule.formalCoverage && (
+                              <div className="scheduling-agent-rule-check">
+                                <div>
+                                  <strong>כיסוי פורמלי:</strong>{" "}
+                                  {rule.formalCoverage.covered || "לא צוין"}
+                                </div>
+                                <div>
+                                  <strong>נשאר סמנטי:</strong>{" "}
+                                  {rule.formalCoverage.semanticOnly || "לא צוין"}
+                                </div>
+                              </div>
+                            )}
+
+                          {!rule.formalRule && rule.semanticGuidance && (
+                            <div>
+                              <strong>הנחיה לסוכן:</strong>{" "}
+                              {rule.semanticGuidance}
+                            </div>
+                          )}
 
                           {rule.formalRule && (
                             <details>
@@ -2263,9 +2813,17 @@ ${JSON.stringify(
                                 ? "✓ מתקיים"
                                 : rule.checkStatus === "violated"
                                   ? "✕ מופר"
-                                  : rule.checkStatus === "stale"
-                                    ? "נדרשת בדיקה מחדש"
-                                    : "לא ניתן לקבוע"}
+                                  : rule.checkStatus === "partial_satisfied"
+                                    ? "◐ החלק הפורמלי מתקיים"
+                                    : rule.checkStatus === "partial_violated"
+                                      ? "◐ החלק הפורמלי מופר"
+                                      : rule.checkStatus === "guidance"
+                                        ? "◈ הנחיה גמישה"
+                                        : rule.checkStatus === "clarification"
+                                          ? "נדרשת הבהרה"
+                                          : rule.checkStatus === "stale"
+                                            ? "נדרשת בדיקה מחדש"
+                                            : "לא ניתן לקבוע"}
                             </strong>
                           </div>
 

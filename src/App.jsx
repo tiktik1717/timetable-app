@@ -10,6 +10,7 @@ import {
 import "./App.css";
 import {
   createAgentWorkspace,
+  createGenerationWorkspace,
   tryWorkspaceMove,
   resetAgentWorkspace,
 } from "./scheduling/agentWorkspace";
@@ -289,11 +290,63 @@ export default function App() {
     setSchedulingAgentWorkspace(workspace);
 
     console.log(
-      "AGENT WORKSPACE STARTED WITH:",
+      "AGENT WORKSPACE STARTED:",
       workspace
     );
 
     return workspace;
+  }
+
+  function startSchedulingGenerationWorkspace() {
+    const workspace = createGenerationWorkspace(schedule);
+    setSchedulingAgentWorkspace(workspace);
+    console.log("GENERATION WORKSPACE STARTED:", workspace);
+    return workspace;
+  }
+
+  function applyGenerationCandidate(result) {
+    const candidateSchedule = result?.candidateSchedule;
+    if (!candidateSchedule || typeof candidateSchedule !== "object") return;
+    setSchedulingAgentWorkspace((current) => {
+      if (!current || current.mode !== "generation") return current;
+      const attempt = {
+        id: `generation-attempt-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        validation: result.validation || null,
+        formalEvaluations: result.formalEvaluations || [],
+        modelResult: result.modelResult || null,
+        codeRuns: result.codeRuns || [],
+        telemetry: result.telemetry || null,
+      };
+      return {
+        ...current,
+        workingSchedule: structuredClone(candidateSchedule),
+        attempts: [...(current.attempts || []), attempt],
+        candidateHistory: [...(current.candidateHistory || []), { id: attempt.id, schedule: structuredClone(candidateSchedule), validation: result.validation || null }],
+        trace: [...(current.trace || []), { type: "generation-attempt", ...attempt }],
+      };
+    });
+  }
+
+  function recordGenerationAttemptFailure(result) {
+    setSchedulingAgentWorkspace((current) => {
+      if (!current || current.mode !== "generation") return current;
+      const attempt = {
+        id: `generation-attempt-failed-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        status: "failed",
+        error: result?.error || "Generation attempt failed",
+        responseId: result?.responseId || null,
+        modelResult: result?.modelResult || null,
+        codeRuns: result?.codeRuns || [],
+        telemetry: result?.telemetry || null,
+      };
+      return {
+        ...current,
+        attempts: [...(current.attempts || []), attempt],
+        trace: [...(current.trace || []), { type: "generation-attempt-failed", ...attempt }],
+      };
+    });
   }
 
   function clearSchedulingAgentWorkspace() {
@@ -4295,8 +4348,17 @@ export default function App() {
     if (isTeacherFreeDay(unit.teacherId, day)) return "המורה נמצא ביום חופשי";
     if (isTeacherBlockedHour(unit.teacherId, day, hour)) return "המורה חסום ביום ובשעה שנבחרו";
     if (isUnitConstraintGroupBlockedAt(unit, day, hour)) return "קבוצת השיבוץ חסומה ביום ובשעה שנבחרו";
-    if (violatesConstraintRulesInSchedule(unit, scheduleObject, day, className, hour))
-      return "השיבוץ מפר את חוקי קבוצת השיבוץ";
+
+    // IMPORTANT: group relationship rules such as "notSameTime"
+    // ("אסור באותו טור") and "notSameDaySameClass" are SOFT CONFLICTS
+    // during manual move/swap. They must not block the operation.
+    //
+    // After the move, hasNotSameTimeConflict / hasNotSameDaySameClassConflict
+    // detect the resulting conflict and the timetable paints the affected
+    // cells red, exactly like an ordinary teacher collision.
+    //
+    // Only real hard blocks above (class/locked cell, teacher availability,
+    // or an explicit constraint-group blocked time) prevent placement.
     return null;
   }
 
@@ -6108,6 +6170,7 @@ export default function App() {
             }
             workspace={schedulingAgentWorkspace}
             onStartWorkspace={startSchedulingAgentWorkspace}
+            onStartGenerationWorkspace={startSchedulingGenerationWorkspace}
             onClearWorkspace={clearSchedulingAgentWorkspace}
             onTryWorkspaceMove={
               tryAgentWorkspaceMove
@@ -6115,6 +6178,8 @@ export default function App() {
             onTryWorkspaceMovePure={
               tryAgentWorkspaceMovePure
             }
+            onApplyGenerationCandidate={applyGenerationCandidate}
+            onRecordGenerationAttemptFailure={recordGenerationAttemptFailure}
           />
         )}
 

@@ -2056,3 +2056,14 @@ td.selected-cell.active-teacher-cell {
   border-radius: 6px;
   background: rgba(0, 0, 0, 0.06);
 }
+
+/* Generation Workspace v1 */
+.generation-workspace-dashboard {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+  padding: 12px;
+  border: 1px solid #d8dde6;
+  border-radius: 10px;
+  background: #f8fafc;
+}

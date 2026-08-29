@@ -56,6 +56,110 @@ function telemetry(response, startedAt = null) {
   };
 }
 
+
+function tryParseFormalRuleJson(value) {
+  if (typeof value !== "string" || !value.trim()) {
+    return { ok: false, value: null };
+  }
+
+  const candidates = [];
+  const raw = value.trim();
+  candidates.push(raw);
+
+  // Models occasionally wrap an otherwise valid JSON object in markdown.
+  const withoutFence = raw
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  if (withoutFence !== raw) candidates.push(withoutFence);
+
+  // If explanatory text leaked around the JSON, try the outermost object.
+  const firstBrace = withoutFence.indexOf("{");
+  const lastBrace = withoutFence.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(withoutFence.slice(firstBrace, lastBrace + 1));
+  }
+
+  // Conservative repairs for common serialization slips. Every repaired
+  // candidate is still accepted ONLY if JSON.parse validates it.
+  for (const candidate of [...candidates]) {
+    candidates.push(
+      candidate.replace(/,\s*([}\]])/g, "$1"),
+    );
+
+    // Smart quotes sometimes leak into JSON punctuation.
+    candidates.push(
+      candidate
+        .replace(/[“”]/g, '"')
+        .replace(/[‘’]/g, "'")
+        .replace(/,\s*([}\]])/g, "$1"),
+    );
+
+    // Python-ish literals occasionally appear in otherwise JSON-shaped output.
+    candidates.push(
+      candidate
+        .replace(/\bTrue\b/g, "true")
+        .replace(/\bFalse\b/g, "false")
+        .replace(/\bNone\b/g, "null")
+        .replace(/,\s*([}\]])/g, "$1"),
+    );
+
+    // Single-quoted JSON-like strings are not valid JSON. This repair is
+    // intentionally conservative and only targets simple quoted tokens.
+    candidates.push(
+      candidate
+        .replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_m, body) =>
+          JSON.stringify(body.replace(/\\'/g, "'"))
+        )
+        .replace(/,\s*([}\]])/g, "$1"),
+    );
+
+    // Quote simple unquoted object keys.
+    candidates.push(
+      candidate
+        .replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)/g, '$1"$2"$3')
+        .replace(/,\s*([}\]])/g, "$1"),
+    );
+  }
+
+  for (const candidate of [...new Set(candidates)]) {
+    try {
+      const parsed = JSON.parse(candidate);
+      return {
+        ok: true,
+        value: JSON.stringify(parsed),
+      };
+    } catch {
+      // Try next candidate.
+    }
+  }
+
+  return { ok: false, value: null };
+}
+
+
+function hasMeaningfulSemanticRemainder(item) {
+  if (item?.formalizationStatus !== "formalized") return false;
+  const remainder = String(
+    item?.formalCoverage?.semanticOnly ?? "",
+  ).trim();
+  if (!remainder) return false;
+
+  const normalized = remainder
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+  return ![
+    "אין",
+    "ללא",
+    "none",
+    "n/a",
+    "לא",
+    "-",
+  ].includes(normalized);
+}
+
 export default async (request) => {
   try {
     if (request.method !== "POST") {
@@ -117,29 +221,70 @@ export default async (request) => {
     const compiledRules =
       (parsed.compiledRules || []).map(
         (item) => {
-          if (
-            item.formalizationStatus !==
-              "formalized" ||
-            !item.formalRuleJson
-          ) {
+          const expectsFormalJson =
+            item.formalizationStatus === "formalized" ||
+            item.formalizationStatus === "partially_formalized";
+
+          if (!expectsFormalJson || !item.formalRuleJson) {
+            const unsupported =
+              item?.capabilityPlan?.unsupportedRequirements || [];
+            if (
+              item.formalizationStatus === "semantic_only" &&
+              item.ruleKind !== "comparison_objective" &&
+              item.ruleKind !== "search_strategy" &&
+              unsupported.length === 0
+            ) {
+              return {
+                ...item,
+                explanation:
+                  `${item.explanation || ""} [Capability guard: semantic_only returned without any unsupported requirement; review compiler planning.]`,
+              };
+            }
             return item;
           }
 
-          try {
-            JSON.parse(item.formalRuleJson);
-            return item;
-          } catch {
-            return {
+          const parsedFormalRule =
+            tryParseFormalRuleJson(item.formalRuleJson);
+
+          if (parsedFormalRule.ok) {
+            const canonicalItem = {
               ...item,
-              formalizationStatus:
-                "semantic_only",
-              evaluatorKey: "unsupported",
-              clarificationQuestion: null,
-              explanation:
-                `${item.explanation} [Compiler guard: formalRuleJson was not valid JSON.]`,
-              formalRuleJson: null,
+              formalRuleJson: parsedFormalRule.value,
             };
+
+            // Safety guard: a rule cannot claim full formalization while
+            // simultaneously declaring a meaningful semantic remainder.
+            if (hasMeaningfulSemanticRemainder(canonicalItem)) {
+              return {
+                ...canonicalItem,
+                formalizationStatus: "partially_formalized",
+                explanation:
+                  `${canonicalItem.explanation} [Compiler guard: meaningful semantic remainder => partially_formalized.]`,
+              };
+            }
+
+            return canonicalItem;
           }
+
+          // Never pretend an invalid JSON artifact is deterministically
+          // enforceable. Preserve the understood semantics, but make the
+          // downgrade explicit and remove evaluator support.
+          return {
+            ...item,
+            formalizationStatus: "semantic_only",
+            evaluatorKey: "unsupported",
+            clarificationQuestion: null,
+            formalCoverage: {
+              covered: "",
+              semanticOnly:
+                item.semanticGuidance ||
+                item.interpretation ||
+                "החוק מובן אך הייצוג הפורמלי שהוחזר לא היה JSON תקין.",
+            },
+            explanation:
+              `${item.explanation} [Compiler guard: formalRuleJson remained invalid after conservative repair.]`,
+            formalRuleJson: null,
+          };
         },
       );
 

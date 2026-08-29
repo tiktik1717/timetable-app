@@ -254,6 +254,7 @@ Do not use network access. Keep the Python explicit and deterministic.
       rules,
       schedule: candidateSchedule,
       schoolData,
+      baselineSchedule: baseSchedule,
     });
 
     const usage = response.usage || {};

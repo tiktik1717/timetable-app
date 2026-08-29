@@ -87,3 +87,38 @@ export function resetAgentWorkspace(workspace) {
         attempts: [],
     };
 }
+
+export function createEmptyScheduleFromTemplate(schedule) {
+    const emptySchedule = {};
+
+    for (const [day, daySchedule] of Object.entries(schedule || {})) {
+        emptySchedule[day] = {};
+        for (const [className, classSchedule] of Object.entries(daySchedule || {})) {
+            emptySchedule[day][className] = {};
+            for (const hour of Object.keys(classSchedule || {})) {
+                emptySchedule[day][className][hour] = null;
+            }
+        }
+    }
+
+    return emptySchedule;
+}
+
+export function createGenerationWorkspace(schedule) {
+    if (!schedule) {
+        throw new Error("Cannot create generation workspace without schedule template");
+    }
+
+    const emptySchedule = createEmptyScheduleFromTemplate(schedule);
+
+    return {
+        mode: "generation",
+        createdAt: new Date().toISOString(),
+        originalSchedule: structuredClone(schedule),
+        baselineSchedule: structuredClone(schedule),
+        workingSchedule: emptySchedule,
+        attempts: [],
+        candidateHistory: [],
+        trace: [],
+    };
+}

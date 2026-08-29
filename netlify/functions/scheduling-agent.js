@@ -371,11 +371,27 @@ export default async (request) => {
 
 חוקי-על:
 - לחוק status="unparsed" נסה להציע updateRuleInterpretation.
-- formalized: החזר formalRuleJson כמחרוזת JSON תקינה.
-- semantic_only: החוק מובן אך אינו ניתן לפורמליזציה בטוחה כרגע.
+- formalized: קיים Formal Rule שמכסה את מלוא המשמעות המהותית של החוק.
+- partially_formalized: קיים Formal Rule רק לחלק מהמשמעות. השתמש ב-formalCoverage.covered לבדיקה הדטרמיניסטית וב-formalCoverage.semanticOnly/semanticGuidance עבור החלק שנותר; אל תציג את החוק כולו כמתקיים רק משום שהחלק הפורמלי עבר.
+- semantic_only אינו כישלון: החוק מובן ונשמר כהנחיה גמישה גם בלי Formal Rule.
 - needs_clarification: יש עמימות מהותית; שאל שאלה אחת ממוקדת.
+- ruleKind="hard_constraint": התייחס אליו כאילוץ על התוצאה.
+- ruleKind="soft_preference": נסה לשפר את הציון/להקטין חריגות, אך אל תעדיף אותו על חוק critical. אם קיים Formal Rule מדיד עם severity=recommended, השתמש במספר ההפרות כ-penalty/מדד איכות; אל תתייחס להפרה כפסילת המערכת.
+- בהעדפות מיקום בזמן השתמש בשדות placements הגנריים: hour לשעה מוחלטת; teacherTeachingSlotIndex/teacherTeachingSlotFromEnd למיקום ביום המורה; isTeacherFirstTeachingSlot/isTeacherLastTeachingSlot לראשון/אחרון; ושדות class המקבילים ליום הכיתה.
+- ב"מחנך יתחיל בכיתתו" בדוק את ה-placement הראשון בפועל בכל יום עבודה (isTeacherFirstTeachingSlot=true) והעדף isHomeroomForClass=true; אל תעניש יום שבו המורה אינו עובד. ב-weighted_objective ודא שרכיבי "רגיל" ו"מיוחד" אינם חופפים אם המשקלים אמורים להיות מוחלטים (למשל רגיל=1, מיוחד=2).
+- כאשר Formal Rule הוא exists, הוא מחייב קיום של מופע מתאים אך משאיר שדות שלא סוננו (למשל day) חופשיים לחיפוש. אל תקבע אותם שרירותית.
+- הבחן בין required existence לבין exclusivity: required_slots/exists אומרים שחייב להיות מופע; every_placement עם assertions של day/hour אומר שכל המופעים חייבים להישאר בתחום המותר.
+- בהעדפה מותנית על חלונות, ניתן למדוד כל teacher_day עם gapCount>0 ולתת penalty כאשר endHour>6.
+- ruleKind="comparison_objective": אם קיים Formal Rule מסוג comparative_objective, השתמש ב-objectiveValue הדטרמיניסטי מול מערכת הבסיס. changed_cells מודד תאים ששונו; nonincrease_per_group מעניש רק הגדלות ביחס לבייסליין. ניסוחים כמו "לצמצם/למזער/כמה שפחות" הם יעד אופטימיזציה ולא איסור מוחלט.
+- אם חוק מדבר על "שעה שישית", הכוונה לקיום placement ב-hour=6 גם אם למורה יש לאחר מכן שעה 7; אל תחליף זאת ב-endHour=6.
+- איסור פשוט על שעה/יום/ערך עבור כל שיבוצי ישות ניתן לבטא כ-every_placement עם assertion הפוכה, למשל teacherId=X + hour neq 1.
+- כאשר חוק מדבר על "שתי שעות חלון רצופות", השתמש ב-maxConsecutiveGapHours ולא ב-gapCount. gapCount סופר את כל שעות החלון הפנימיות גם אם הן נפרדות; maxConsecutiveGapHours מודד רק את הרצף הארוך ביותר.
+- ruleKind="search_strategy": השתמש בו כדי לבחור סדר פעולות וחיפוש, גם אם אין evaluator דטרמיניסטי.
+- ruleKind="semantic_guidance": שמור את originalText/semanticGuidance כהנחיה פעילה ואל תתעלם ממנה רק משום שאין JSON פורמלי.
+- אם יש semanticGuidance, השתמש בו לצד originalText כמקור אופרטיבי להבנת הכוונה.
 - אל תשנה originalText ואל תמציא teacherId/className/meetingId.
 - תוצאה דטרמיניסטית עם supported=true גוברת על הערכה סמנטית שלך לאותו חוק.
+- היררכיה: critical > known_constraint > recommended. בתוך recommended, כאשר evaluator מחזיר objectiveValue, העדף ערך טוב יותר לפי direction במקום לספור רק satisfied/violated. weighted_objective כבר כולל משקולות בציון. במקרה של התנגשות הסבר את ה-tradeoff.
 
 בדיקת חוק:
 - החזר ruleCheckResults עבור חוקים שבדקת.

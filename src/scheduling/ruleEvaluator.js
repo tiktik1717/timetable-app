@@ -3,6 +3,7 @@ export function evaluateFormalRule({
   rule,
   schedule,
   schoolData,
+  baselineSchedule = null,
 }) {
   if (!rule?.formalRule) {
     return {
@@ -20,6 +21,7 @@ export function evaluateFormalRule({
       expression: formalRule.expression,
       schedule,
       schoolData,
+      baselineSchedule,
     });
   }
 
@@ -63,6 +65,7 @@ export function evaluateFormalRule({
           rule: clauseRule,
           schedule,
           schoolData,
+          baselineSchedule,
         });
 
         return {
@@ -104,6 +107,7 @@ export function evaluateFormalRule({
       expression: formalRule.expression,
       schedule,
       schoolData,
+      baselineSchedule,
     });
   }
 
@@ -1456,6 +1460,7 @@ export function evaluateFormalRules({
   rules = [],
   schedule,
   schoolData,
+  baselineSchedule = null,
 }) {
   return (rules || [])
     .filter((rule) => rule?.formalRule)
@@ -1464,6 +1469,7 @@ export function evaluateFormalRules({
         rule,
         schedule,
         schoolData,
+        baselineSchedule,
       });
 
       return {
@@ -1489,6 +1495,21 @@ export function formalRuleEvaluationsToRuleCheckResults(
         status: "unknown",
         summary: "החוק פורמלי אך עדיין אין evaluator דטרמיניסטי שתומך בו.",
         violations: [],
+        source: "formal-rule-evaluator",
+      };
+    }
+
+    if (result.objective) {
+      return {
+        ruleId: result.ruleId,
+        status: "objective_measured",
+        summary:
+          `${result.direction === "maximize" ? "יעד מקסום" : "יעד מזעור"} נמדד: ${result.objectiveValue}.`,
+        violations: [],
+        objective: true,
+        direction: result.direction,
+        objectiveValue: result.objectiveValue,
+        measurements: result.measurements || [],
         source: "formal-rule-evaluator",
       };
     }
